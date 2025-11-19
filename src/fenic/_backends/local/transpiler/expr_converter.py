@@ -119,7 +119,12 @@ from fenic.core._logical_plan.expressions import (
     Operator,
     OtherwiseExpr,
     RecursiveTextChunkExpr,
+    RegexpCountExpr,
+    RegexpExtractAllExpr,
+    RegexpExtractExpr,
+    RegexpInstrExpr,
     RegexpSplitExpr,
+    RegexpSubstrExpr,
     ReplaceExpr,
     RLikeExpr,
     SecondExpr,
@@ -877,6 +882,74 @@ class ExprConverter:
                 pattern=logical.pattern, value=delimiter, literal=False
             )
             return split_ready.str.split(by=delimiter)
+
+
+    @_convert_expr.register(RegexpCountExpr)
+    def _convert_regexp_count_expr(self, logical: RegexpCountExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        pattern_expr = self._convert_expr(logical.pattern)
+
+        # str.count_matches accepts expressions directly
+        return physical_expr.str.count_matches(pattern_expr, literal=False)
+
+
+    @_convert_expr.register(RegexpExtractExpr)
+    def _convert_regexp_extract_expr(self, logical: RegexpExtractExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        pattern_expr = self._convert_expr(logical.pattern)
+
+        # str.extract accepts pattern as expr, but group_index must be int
+        return physical_expr.str.extract(pattern_expr, logical.idx).fill_null("")
+
+
+    @_convert_expr.register(RegexpExtractAllExpr)
+    def _convert_regexp_extract_all_expr(self, logical: RegexpExtractAllExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        pattern_expr = self._convert_expr(logical.pattern)
+
+        # For PySpark compatibility: extract all matches of a specific group
+        if isinstance(logical.idx, LiteralExpr) and isinstance(logical.pattern, LiteralExpr):
+            group_idx = int(logical.idx.literal)
+            pattern = logical.pattern.literal
+
+            if group_idx == 0:
+                # Group 0: extract entire match using extract_all (fast path)
+                return physical_expr.str.extract_all(pattern)
+
+        # For column expressions, use the Rust plugin for PySpark-compatible behavior
+        idx_expr = self._convert_expr(logical.idx)
+        return physical_expr.regexp.extract_all(pattern_expr, idx_expr)
+
+
+    @_convert_expr.register(RegexpInstrExpr)
+    def _convert_regexp_instr_expr(self, logical: RegexpInstrExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        pattern_expr = self._convert_expr(logical.pattern)
+
+        # If idx is a literal, use native Polars operations (faster)
+        if isinstance(logical.idx, LiteralExpr):
+            # Extract the match at the specified group index
+            match_expr = physical_expr.str.extract(pattern_expr, int(logical.idx.literal))
+            # Find position: use str.find on the match within the original string
+            # Add 1 to convert from 0-based to 1-based indexing (PySpark compatibility)
+            # Return 0 if no match, null if input is null
+            return pl.when(physical_expr.is_null()).then(None).otherwise(
+                pl.when(match_expr.is_null()).then(pl.lit(0)).otherwise(
+                    physical_expr.str.find(match_expr, literal=True) + 1
+                )
+            )
+
+        idx_expr = self._convert_expr(logical.idx)
+        return physical_expr.regexp.instr(pattern_expr, idx_expr)
+
+
+    @_convert_expr.register(RegexpSubstrExpr)
+    def _convert_regexp_substr_expr(self, logical: RegexpSubstrExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        pattern_expr = self._convert_expr(logical.pattern)
+
+        # str.extract accepts pattern as expr, extract group 0 (entire match)
+        return physical_expr.str.extract(pattern_expr, 0)
 
 
     @_convert_expr.register(StripCharsExpr)

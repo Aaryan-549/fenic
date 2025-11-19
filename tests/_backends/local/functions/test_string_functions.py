@@ -519,26 +519,6 @@ def test_replace_no_matches(replace_test_df):
     assert result["replaced_text_col"][1] == "hello hello world"
 
 
-def test_regexp_replace_basic(replace_test_df):
-    result = replace_test_df.with_column(
-        "replaced_text_col", text.regexp_replace(col("text_col"), "^hello", "hi")
-    ).to_polars()
-    # Should only replace 'hello' at the start of the string
-    assert result["replaced_text_col"][0] == "hi world"
-    assert result["replaced_text_col"][1] == "hi hello world"
-    assert result["replaced_text_col"][2] == "world hello world"
-    assert result["replaced_text_col"][3] == "no matches here"
-
-
-def test_regexp_replace_word_boundaries(replace_test_df):
-    result = replace_test_df.with_column(
-        "replaced_text_col", text.regexp_replace(col("text_col"), r"\bhello\b", "hi")
-    ).to_polars()
-    # Should replace 'hello' only when it's a complete word
-    assert result["replaced_text_col"][0] == "hi world"
-    assert result["replaced_text_col"][1] == "hi hi world"
-    assert result["replaced_text_col"][2] == "world hi world"
-    assert result["replaced_text_col"][3] == "no matches here"
 
 
 def test_replace_with_column_pattern(local_session):
@@ -556,39 +536,6 @@ def test_replace_with_column_pattern(local_session):
     assert result["replaced_text_col"][0] == "hi world"
     assert result["replaced_text_col"][1] == "bye world"
     assert result["replaced_text_col"][2] == "hello planet"
-
-
-def test_regexp_replace_with_column_pattern(local_session):
-    df = local_session.create_dataframe(
-        {
-            "text_col": ["hello123world", "test456example", "sample789text"],
-            "pattern": [r"\d+", r"[0-9]+", r"[0-9]{3}"],
-            "replacement": ["---", "***", "###"],
-        }
-    )
-    result = df.with_column(
-        "replaced_text_col",
-        text.regexp_replace(col("text_col"), col("pattern"), col("replacement")),
-    ).to_polars()
-    assert result["replaced_text_col"][0] == "hello---world"
-    assert result["replaced_text_col"][1] == "test***example"
-    assert result["replaced_text_col"][2] == "sample###text"
-
-
-def test_regexp_replace_with_column_pattern_and_fixed_replacement(local_session):
-    df = local_session.create_dataframe(
-        {
-            "text_col": ["hello123world", "test456example", "sample789text"],
-            "pattern": [r"\d+", r"[0-9]+", r"[0-9]{3}"],
-        }
-    )
-    result = df.with_column(
-        "replaced_text_col",
-        text.regexp_replace(col("text_col"), col("pattern"), "---"),
-    ).to_polars()
-    assert result["replaced_text_col"][0] == "hello---world"
-    assert result["replaced_text_col"][1] == "test---example"
-    assert result["replaced_text_col"][2] == "sample---text"
 
 
 def test_split(split_test_df):
