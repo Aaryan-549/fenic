@@ -2,12 +2,11 @@
 
 from fenic.core._logical_plan.expressions.basic import (
     AliasExpr,
-    ArrayContainsExpr,
     ArrayExpr,
-    ArrayLengthExpr,
     CastExpr,
     CoalesceExpr,
     ColumnExpr,
+    FlattenExpr,
     GreatestExpr,
     IndexExpr,
     InExpr,
@@ -26,12 +25,11 @@ from fenic.core._serde.proto.expression_serde import (
 from fenic.core._serde.proto.serde_context import SerdeContext
 from fenic.core._serde.proto.types import (
     AliasExprProto,
-    ArrayContainsExprProto,
     ArrayExprProto,
-    ArrayLengthExprProto,
     CastExprProto,
     CoalesceExprProto,
     ColumnExprProto,
+    FlattenExprProto,
     GreatestExprProto,
     IndexExprProto,
     InExprProto,
@@ -370,55 +368,29 @@ def _deserialize_is_null_expr(
 
 
 # =============================================================================
-# ArrayLengthExpr
+# FlattenExpr
 # =============================================================================
 
 
 @serialize_logical_expr.register
-def _serialize_array_length_expr(
-    logical: ArrayLengthExpr, context: SerdeContext
+def _serialize_flatten_expr(
+    logical: FlattenExpr, context: SerdeContext
 ) -> LogicalExprProto:
     return LogicalExprProto(
-        array_length=ArrayLengthExprProto(
+        flatten=FlattenExprProto(
             expr=context.serialize_logical_expr(SerdeContext.EXPR, logical.expr)
         )
     )
 
 
 @_deserialize_logical_expr_helper.register
-def _deserialize_array_length_expr(
-    logical_proto: ArrayLengthExprProto, context: SerdeContext
-) -> ArrayLengthExpr:
-    return ArrayLengthExpr(
+def _deserialize_flatten_expr(
+    logical_proto: FlattenExprProto, context: SerdeContext
+) -> FlattenExpr:
+    return FlattenExpr(
         expr=context.deserialize_logical_expr(SerdeContext.EXPR, logical_proto.expr)
     )
 
-
-# =============================================================================
-# ArrayContainsExpr
-# =============================================================================
-
-
-@serialize_logical_expr.register
-def _serialize_array_contains_expr(
-    logical: ArrayContainsExpr, context: SerdeContext
-) -> LogicalExprProto:
-    return LogicalExprProto(
-        array_contains=ArrayContainsExprProto(
-            expr=context.serialize_logical_expr(SerdeContext.EXPR, logical.expr),
-            other=context.serialize_logical_expr(SerdeContext.OTHER, logical.other),
-        )
-    )
-
-
-@_deserialize_logical_expr_helper.register
-def _deserialize_array_contains_expr(
-    logical_proto: ArrayContainsExprProto, context: SerdeContext
-) -> ArrayContainsExpr:
-    return ArrayContainsExpr(
-        expr=context.deserialize_logical_expr(SerdeContext.EXPR, logical_proto.expr),
-        other=context.deserialize_logical_expr(SerdeContext.OTHER, logical_proto.other),
-    )
 
 # =============================================================================
 # GreatestExpr
@@ -462,3 +434,7 @@ def _deserialize_least_expr(
     return LeastExpr(
         exprs=context.deserialize_logical_expr_list(SerdeContext.EXPRS, logical_proto.exprs)
     )
+
+
+# Import array serde module to trigger registration
+import fenic.core._serde.proto.expressions.array  # noqa: E402, F401

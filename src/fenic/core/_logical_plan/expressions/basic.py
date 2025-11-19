@@ -347,10 +347,8 @@ class IsNullExpr(LogicalExpr):
         return self.is_null == other.is_null
 
 
-class ArrayLengthExpr(ValidatedSignature, UnparameterizedExpr, LogicalExpr):
-    """Expression representing array length calculation."""
-
-    function_name = "array_size"
+class FlattenExpr(ValidatedDynamicSignature, UnparameterizedExpr, LogicalExpr):
+    function_name = "flatten"
 
     def __init__(self, expr: LogicalExpr):
         self.expr = expr
@@ -363,24 +361,13 @@ class ArrayLengthExpr(ValidatedSignature, UnparameterizedExpr, LogicalExpr):
     def children(self) -> List[LogicalExpr]:
         return [self.expr]
 
+    def _infer_dynamic_return_type(self, arg_types: List[DataType], plan: LogicalPlan, session_state: BaseSessionState) -> DataType:
+        """Return array of inner element type (flatten one level)."""
+        array_type = arg_types[0]
+        if isinstance(array_type, ArrayType) and isinstance(array_type.element_type, ArrayType):
+            return ArrayType(array_type.element_type.element_type)
+        raise TypeError(f"Expected Array<Array<T>>, got {array_type}")
 
-class ArrayContainsExpr(ValidatedSignature, UnparameterizedExpr, LogicalExpr):
-    """Expression representing array contains check."""
-
-    function_name = "array_contains"
-
-    def __init__(self, expr: LogicalExpr, other: LogicalExpr):
-        self.expr = expr
-        self.other = other
-        self._children = [expr, other]
-        self._validator = SignatureValidator(self.function_name)
-
-    @property
-    def validator(self) -> SignatureValidator:
-        return self._validator
-
-    def children(self) -> List[LogicalExpr]:
-        return self._children
 
 class CastExpr(LogicalExpr):
     def __init__(self, expr: LogicalExpr, dest_type: DataType):

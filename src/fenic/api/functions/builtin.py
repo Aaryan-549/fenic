@@ -7,18 +7,20 @@ from typing import Any, Awaitable, Callable, List, Optional, Tuple, Union
 from pydantic import ConfigDict, validate_call
 
 from fenic.api.column import Column, ColumnOrName
+
+# Import array module for backwards-compatible aliases
+from fenic.api.functions import array as _arr_ns
 from fenic.api.functions.core import lit
 from fenic.core._logical_plan.expressions import (
     ApproxCountDistinctExpr,
-    ArrayContainsExpr,
     ArrayExpr,
-    ArrayLengthExpr,
     AsyncUDFExpr,
     AvgExpr,
     CoalesceExpr,
     CountDistinctExpr,
     CountExpr,
     FirstExpr,
+    FlattenExpr,
     GreatestExpr,
     LeastExpr,
     ListExpr,
@@ -677,76 +679,50 @@ def desc_nulls_last(column: ColumnOrName) -> Column:
 
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
-def array_size(column: ColumnOrName) -> Column:
-    """Returns the number of elements in an array column.
+def flatten(column: ColumnOrName) -> Column:
+    """Flattens an array of arrays into a single array (one level deep).
 
-    This function computes the length of arrays stored in the specified column.
-    Returns None for None arrays.
+    Flattens nested arrays by concatenating all inner arrays into a single array.
+    Only flattens one level of nesting. Returns null if the input is null.
 
     Args:
-        column: Column or column name containing arrays whose length to compute.
+        column: Column or column name containing arrays of arrays.
 
     Returns:
-        A Column expression representing the array length.
+        A Column with flattened arrays (one level deep).
 
-    Raises:
-        TypeError: If the column does not contain array data.
-
-    Example: Get array sizes
+    Example: Flattening nested arrays
         ```python
-        # Get the size of arrays in 'tags' column
-        df.select(array_size("tags"))
+        import fenic as fc
 
-        # Use with column reference
-        df.select(array_size(col("tags")))
+        df = fc.Session.local().create_dataframe({
+            "nested": [[[1, 2], [3, 4]], [[5], [6, 7, 8]], None]
+        })
+
+        result = df.select(fc.flatten("nested").alias("flat"))
+        # Output:
+        # ┌──────────────────┐
+        # │ flat             │
+        # ├──────────────────┤
+        # │ [1, 2, 3, 4]     │
+        # │ [5, 6, 7, 8]     │
+        # │ null             │
+        # └──────────────────┘
+        ```
+
+    Example: One level only
+        ```python
+        # Deeply nested arrays - only flattens one level
+        df = fc.Session.local().create_dataframe({
+            "deep": [[[[1]], [[2]]], [[[3]]]]
+        })
+
+        result = df.select(fc.flatten("deep"))
+        # Output: [[[1], [2]], [[3]]]  # Still nested after one level
         ```
     """
     return Column._from_logical_expr(
-        ArrayLengthExpr(Column._from_col_or_name(column)._logical_expr)
-    )
-
-
-@validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
-def array_contains(
-    column: ColumnOrName, value: Union[str, int, float, bool, Column]
-) -> Column:
-    """Checks if array column contains a specific value.
-
-    This function returns True if the array in the specified column contains the given value,
-    and False otherwise. Returns False if the array is None.
-
-    Args:
-        column: Column or column name containing the arrays to check.
-
-        value: Value to search for in the arrays. Can be:
-            - A literal value (string, number, boolean)
-            - A Column expression
-
-    Returns:
-        A boolean Column expression (True if value is found, False otherwise).
-
-    Raises:
-        TypeError: If value type is incompatible with the array element type.
-        TypeError: If the column does not contain array data.
-
-    Example: Check for values in arrays
-        ```python
-        # Check if 'python' exists in arrays in the 'tags' column
-        df.select(array_contains("tags", "python"))
-
-        # Check using a value from another column
-        df.select(array_contains("tags", col("search_term")))
-        ```
-    """
-    value_column = None
-    if isinstance(value, Column):
-        value_column = value
-    else:
-        value_column = lit(value)
-    return Column._from_logical_expr(
-        ArrayContainsExpr(
-            Column._from_col_or_name(column)._logical_expr, value_column._logical_expr
-        )
+        FlattenExpr(Column._from_col_or_name(column)._logical_expr)
     )
 
 
@@ -888,3 +864,15 @@ def least(*cols: ColumnOrName) -> Column:
         Column._from_col_or_name(c)._logical_expr for c in cols
     ]
     return Column._from_logical_expr(LeastExpr(exprs))
+
+
+# =============================================================================
+# Array Functions - Backwards-compatible aliases
+# =============================================================================
+# For backwards compatibility, we maintain top-level aliases for array functions
+# that existed before this PR. New array functions should use fc.arr.* namespace.
+# Preferred usage: fc.arr.size(), fc.arr.contains(), etc.
+# Backwards-compatible (for functions that existed before): fc.array_size(), fc.array_contains()
+array_size = _arr_ns.size
+array_contains = _arr_ns.contains
+

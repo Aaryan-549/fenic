@@ -1,5 +1,9 @@
-"""Functions for working with DataFrame columns."""
+"""Functions for working with DataFrame columns.
 
+Note: Array functions are available via fc.arr.* namespace (e.g., fc.arr.size()).
+"""
+
+from fenic.api.functions import array as arr
 from fenic.api.functions import dt, embedding, json, markdown, semantic, text
 from fenic.api.functions.builtin import (
     approx_count_distinct,
@@ -20,6 +24,7 @@ from fenic.api.functions.builtin import (
     desc_nulls_first,
     desc_nulls_last,
     first,
+    flatten,
     greatest,
     least,
     max,
@@ -38,8 +43,11 @@ __all__ = [
     "semantic",
     "text",
     "embedding",
+    "arr",
     "array",
     "array_agg",
+    "array_contains",
+    "array_size",
     "async_udf",
     "avg",
     "approx_count_distinct",
@@ -58,20 +66,13 @@ __all__ = [
     "udf",
     "col",
     "lit",
-    "array_size",
-    "array_contains",
     "asc",
     "asc_nulls_first",
     "asc_nulls_last",
     "desc",
     "desc_nulls_first",
     "desc_nulls_last",
-    "extract",
-    "token_chunk",
-    "concat",
-    "concat_ws",
-    "array_join",
-    "replace",
+    "flatten",
     "when",
     "first",
     "stddev",

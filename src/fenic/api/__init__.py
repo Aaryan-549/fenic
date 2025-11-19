@@ -5,6 +5,7 @@ from fenic.api.column import Column, ColumnOrName
 from fenic.api.dataframe import DataFrame, GroupedData, SemanticExtensions
 from fenic.api.functions import (
     approx_count_distinct,
+    arr,
     array,
     array_agg,
     array_contains,
@@ -26,6 +27,7 @@ from fenic.api.functions import (
     embedding,
     empty,
     first,
+    flatten,
     greatest,
     json,
     least,
@@ -103,6 +105,7 @@ __all__ = [
     "json",
     "markdown",
     "embedding",
+    "arr",
     "array",
     "array_agg",
     "array_contains",
@@ -121,6 +124,7 @@ __all__ = [
     "desc_nulls_first",
     "desc_nulls_last",
     "first",
+    "flatten",
     "max",
     "mean",
     "min",
