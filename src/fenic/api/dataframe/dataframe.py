@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, overload
 
+from fenic.core._logical_plan.plans.transform import ExplodeWithIndex
+
 if TYPE_CHECKING:
     from fenic.api.io.writer import DataFrameWriter
 
@@ -1239,6 +1241,188 @@ class DataFrame:
         return self._from_logical_plan(
             Explode.from_session_state(self._logical_plan, Column._from_col_or_name(column)._logical_expr, self._session_state),
             self._session_state,
+        )
+
+    def explode_with_index(
+        self,
+        column: ColumnOrName,
+        index_col_name: str = "pos",
+        value_col_name: str = "col",
+        keep_null_and_empty: bool = False,
+    ) -> DataFrame:
+        """Create a new row for each element in an array column, with the element's position in the array and its value.
+
+        This operation is similar to explode(), but also adds a column containing the 0-based
+        position of each element within its original array. By default, the position column is named "pos".
+        and the value column is named "col". These columns replace the original column in the output DataFrame.
+        If keep_null_and_empty is True, the position column will be null for rows where the array is null or empty.
+
+        Args:
+            column: Name of array column to explode (as string) or Column expression.
+            index_col_name: Name for the column containing 0-based array positions (default: "pos").
+            value_col_name: Name for the exploded value column (default: "col").
+            keep_null_and_empty: If True, preserves rows where the array is null or empty (default: False).
+                Mimicks the behavior of posexplode (false) vs posexplode_outer (true).
+
+        Returns:
+            DataFrame: New DataFrame with:
+                - An integer column (named `index_col_name`) containing 0-based positions
+                - The exploded array column (named `value_col_name`)
+                - All other columns from the original DataFrame
+
+        Example: Explode with index
+            ```python
+            df = session.create_dataframe({
+                "id": [1, 2, 3],
+                "tags": [["red", "blue"], ["green"], []],
+            })
+
+            df.explode_with_index("tags").show()
+            # Output:
+            # +-----+---+-----+
+            # | pos| id| tags|
+            # +-----+---+-----+
+            # |    0|  1|  red|
+            # |    1|  1| blue|
+            # |    0|  2|green|
+            # +-----+---+-----+
+            ```
+
+        Example: Custom column names
+            ```python
+            df.explode_with_index("tags", index_col_name="index", value_name="tag").show()
+            # Output:
+            # +-----+---+-----+
+            # |index| id|  tag|
+            # +-----+---+-----+
+            # |    0|  1|  red|
+            # |    1|  1| blue|
+            # |    0|  2|green|
+            # +-----+---+-----+
+            ```
+        """
+        return self._from_logical_plan(
+            ExplodeWithIndex.from_session_state(
+                self._logical_plan,
+                Column._from_col_or_name(column)._logical_expr,
+                index_col_name,
+                value_col_name,
+                self._session_state,
+                keep_null_and_empty,
+            ),
+            self._session_state,
+        )
+
+    def posexplode(self, column: ColumnOrName) -> DataFrame:
+        """Create a new row for each element in an array column, with the element's position in the array and its value.
+
+        This is a PySpark-compatible alias for explode_with_index.
+        Creates two columns: 'pos' (0-based position) and 'col' (the array element value).
+        These columns replace the original column in the output DataFrame.
+
+        Args:
+            column: Name of array column to explode (as string) or Column expression.
+
+        Returns:
+            DataFrame: New DataFrame with 'pos' and 'col' columns, plus all other original columns.
+
+        Example: PySpark-style posexplode
+            ```python
+            df = session.create_dataframe({
+                "id": [1, 2],
+                "tags": [["red", "blue"], ["green"]],
+            })
+
+            df.posexplode("tags").show()
+            # Output:
+            # +---+---+-----+
+            # |pos| id|  col|
+            # +---+---+-----+
+            # |  0|  1|  red|
+            # |  1|  1| blue|
+            # |  0|  2|green|
+            # +---+---+-----+
+            ```
+        """
+        return self.explode_with_index(column)
+
+    def explode_outer(self, column: ColumnOrName) -> DataFrame:
+        """Create a new row for each element in an array column, containing the element's position in the array and its value, and preserving null/empty arrays.
+
+        This operation is similar to explode(), but keeps rows where the array column
+        is null or empty, producing a row with null in the exploded column.
+
+        Args:
+            column: Name of array column to explode (as string) or Column expression.
+
+        Returns:
+            DataFrame: New DataFrame with the array column exploded into multiple rows.
+            Rows with null or empty arrays are preserved with null in the exploded column.
+
+        Example: Explode with outer join behavior
+            ```python
+            df = session.create_dataframe({
+                "id": [1, 2, 3],
+                "tags": [["red", "blue"], [], None],
+            })
+
+            df.explode_outer("tags").show()
+            # Output:
+            # +---+-----+
+            # | id| tags|
+            # +---+-----+
+            # |  1|  red|
+            # |  1| blue|
+            # |  2| NULL|  # empty array preserved as null
+            # |  3| NULL|  # null array preserved as null
+            # +---+-----+
+            ```
+        """
+        return self._from_logical_plan(
+            Explode.from_session_state(
+                self._logical_plan,
+                Column._from_col_or_name(column)._logical_expr,
+                self._session_state,
+                keep_null_and_empty=True
+            ),
+            self._session_state,
+        )
+
+    def posexplode_outer(self, column: ColumnOrName) -> DataFrame:
+        """Create a new row for each element in an array column with position and value, preserving null/empty arrays.
+
+        This is a PySpark-compatible alias for explode_with_index with keep_null_and_empty=True.
+        Creates two columns: 'pos' (0-based position) and 'col' (the array element value).
+        Rows with null or empty arrays produce (null, null).
+
+        Args:
+            column: Name of array column to explode (as string) or Column expression.
+
+        Returns:
+            DataFrame: New DataFrame with 'pos' and 'col' columns, plus all other original columns.
+            Rows with null or empty arrays are preserved with (null, null).
+
+        Example: PySpark-style posexplode_outer
+            ```python
+            df = session.create_dataframe({
+                "id": [1, 2, 3],
+                "tags": [["red", "blue"], [], None],
+            })
+
+            df.posexplode_outer("tags").show()
+            # Output:
+            # +---+---+-----+
+            # |pos| id|  col|
+            # +---+---+-----+
+            # |  0|  1|  red|
+            # |  1|  1| blue|
+            # |NULL|  2| NULL|  # empty array preserved
+            # |NULL|  3| NULL|  # null array preserved
+            # +---+---+-----+
+            ```
+        """
+        return self.explode_with_index(
+            column, keep_null_and_empty=True
         )
 
     def group_by(self, *cols: ColumnOrName) -> GroupedData:
