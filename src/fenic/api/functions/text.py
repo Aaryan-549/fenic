@@ -41,7 +41,7 @@ from fenic.core._logical_plan.expressions.text import (
     TextChunkExprConfiguration,
 )
 from fenic.core.error import ValidationError
-from fenic.core.types import StringType
+from fenic.core.types import ArrayType, StringType
 from fenic.core.types.enums import (
     FuzzySimilarityMethod,
     TranscriptFormatType,
