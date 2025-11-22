@@ -1450,7 +1450,9 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
             - "de" (German)
             - "it" (Italian)
             - "pt" (Portuguese)
-        custom_stopwords: Optional list of additional stopwords to remove (case-insensitive)
+        custom_stopwords: Optional list of custom stopwords to use instead of language-based
+            stopwords (case-insensitive). When provided, the language parameter is ignored
+            and only the specified custom stopwords are removed.
 
     Returns:
         Text column with stopwords removed, separated by single spaces
@@ -1509,7 +1511,7 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
     column_expr = Column._from_col_or_name(column)._logical_expr
 
     if custom_stopwords is not None:
-        # Combine language stopwords with custom stopwords
+        # Use only custom stopwords (language parameter is ignored in this branch)
         stopwords_list = list(custom_stopwords)
         stopwords_expr = LiteralExpr(stopwords_list, ArrayType(StringType))
         return Column._from_logical_expr(RemoveCustomStopwordsExpr(column_expr, stopwords_expr))
