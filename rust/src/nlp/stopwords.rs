@@ -1,0 +1,157 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
+
+/// Stopwords for multiple languages
+/// Based on common NLP stopword lists
+pub static STOPWORDS: LazyLock<HashMap<&'static str, HashSet<&'static str>>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+
+    // English stopwords
+    map.insert("en", HashSet::from([
+        "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any",
+        "are", "aren't", "as", "at", "be", "because", "been", "before", "being", "below",
+        "between", "both", "but", "by", "can't", "cannot", "could", "couldn't", "did",
+        "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during", "each",
+        "few", "for", "from", "further", "had", "hadn't", "has", "hasn't", "have", "haven't",
+        "having", "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself",
+        "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm", "i've", "if",
+        "in", "into", "is", "isn't", "it", "it's", "its", "itself", "let's", "me", "more",
+        "most", "mustn't", "my", "myself", "no", "nor", "not", "of", "off", "on", "once",
+        "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", "own",
+        "same", "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so",
+        "some", "such", "than", "that", "that's", "the", "their", "theirs", "them",
+        "themselves", "then", "there", "there's", "these", "they", "they'd", "they'll",
+        "they're", "they've", "this", "those", "through", "to", "too", "under", "until",
+        "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were",
+        "weren't", "what", "what's", "when", "when's", "where", "where's", "which", "while",
+        "who", "who's", "whom", "why", "why's", "with", "won't", "would", "wouldn't", "you",
+        "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves",
+    ]));
+
+    // Spanish stopwords
+    map.insert("es", HashSet::from([
+        "un", "una", "unas", "unos", "uno", "sobre", "todo", "también", "tras", "otro",
+        "algún", "alguno", "alguna", "algunos", "algunas", "ser", "es", "soy", "eres", "somos",
+        "sois", "estoy", "esta", "estamos", "estais", "estan", "como", "en", "para", "atras",
+        "porque", "por qué", "estado", "estaba", "ante", "antes", "siendo", "ambos", "pero",
+        "por", "poder", "puede", "puedo", "podemos", "podeis", "pueden", "fui", "fue", "fuimos",
+        "fueron", "hacer", "hago", "hace", "hacemos", "haceis", "hacen", "cada", "fin", "incluso",
+        "primero", "desde", "conseguir", "consigo", "consigue", "consigues", "conseguimos",
+        "consiguen", "ir", "voy", "va", "vamos", "vais", "van", "vaya", "gueno", "ha", "tener",
+        "tengo", "tiene", "tenemos", "teneis", "tienen", "el", "la", "lo", "las", "los", "su",
+        "aqui", "mio", "tuyo", "ellos", "ellas", "nos", "nosotros", "vosotros", "vosotras",
+        "si", "dentro", "solo", "solamente", "saber", "sabes", "sabe", "sabemos", "sabeis",
+        "saben", "ultimo", "largo", "bastante", "haces", "muchos", "aquellos", "aquellas",
+        "sus", "entonces", "tiempo", "verdad", "verdadero", "verdadera", "cierto", "ciertos",
+        "cierta", "ciertas", "intentar", "intento", "intenta", "intentas", "intentamos",
+        "intentais", "intentan", "dos", "bajo", "arriba", "encima", "usar", "uso", "usas",
+        "usa", "usamos", "usais", "usan", "emplear", "empleo", "empleas", "emplean", "ampleamos",
+        "empleais", "valor", "muy", "era", "eras", "eramos", "eran", "modo", "bien", "cual",
+        "cuando", "donde", "mientras", "quien", "con", "entre", "sin", "trabajo", "trabajar",
+        "trabajas", "trabaja", "trabajamos", "trabajais", "trabajan", "podria", "podrias",
+        "podriamos", "podrian", "podriais", "yo", "aquel", "mi", "tu", "te", "ti", "le", "les",
+        "se", "os", "me", "ese", "eso", "esa", "esos", "esas", "este", "esto", "estos", "estas",
+        "de", "del", "al", "y", "e", "o", "u", "a", "que", "no", "ni", "ne", "mas",
+    ]));
+
+    // French stopwords
+    map.insert("fr", HashSet::from([
+        "au", "aux", "avec", "ce", "ces", "dans", "de", "des", "du", "elle", "en", "et",
+        "eux", "il", "je", "la", "le", "leur", "lui", "ma", "mais", "me", "même", "mes",
+        "moi", "mon", "ne", "nos", "notre", "nous", "on", "ou", "par", "pas", "pour", "qu",
+        "que", "qui", "sa", "se", "ses", "son", "sur", "ta", "te", "tes", "toi", "ton",
+        "tu", "un", "une", "vos", "votre", "vous", "c", "d", "j", "l", "à", "m", "n", "s",
+        "t", "y", "été", "étée", "étées", "étés", "étant", "étante", "étants", "étantes",
+        "suis", "es", "est", "sommes", "êtes", "sont", "serai", "seras", "sera", "serons",
+        "serez", "seront", "serais", "serait", "serions", "seriez", "seraient", "étais",
+        "était", "étions", "étiez", "étaient", "fus", "fut", "fûmes", "fûtes", "furent",
+        "sois", "soit", "soyons", "soyez", "soient", "fusse", "fusses", "fût", "fussions",
+        "fussiez", "fussent", "ayant", "ayante", "ayantes", "ayants", "eu", "eue", "eues",
+        "eus", "ai", "as", "avons", "avez", "ont", "aurai", "auras", "aura", "aurons",
+        "aurez", "auront", "aurais", "aurait", "aurions", "auriez", "auraient", "avais",
+        "avait", "avions", "aviez", "avaient", "eut", "eûmes", "eûtes", "eurent", "aie",
+        "aies", "ait", "ayons", "ayez", "aient", "eusse", "eusses", "eût", "eussions",
+        "eussiez", "eussent",
+    ]));
+
+    // German stopwords
+    map.insert("de", HashSet::from([
+        "aber", "alle", "allem", "allen", "aller", "alles", "als", "also", "am", "an",
+        "ander", "andere", "anderem", "anderen", "anderer", "anderes", "anderm", "andern",
+        "anderr", "anders", "auch", "auf", "aus", "bei", "bin", "bis", "bist", "da", "damit",
+        "dann", "der", "den", "des", "dem", "die", "das", "daß", "dass", "derselbe",
+        "derselben", "denselben", "desselben", "demselben", "dieselbe", "dieselben",
+        "dasselbe", "dazu", "dein", "deine", "deinem", "deinen", "deiner", "deines", "denn",
+        "derer", "dessen", "dich", "die", "dies", "diese", "diesem", "diesen", "dieser",
+        "dieses", "dir", "doch", "dort", "durch", "ein", "eine", "einem", "einen", "einer",
+        "eines", "einig", "einige", "einigem", "einigen", "einiger", "einiges", "einmal",
+        "er", "ihn", "ihm", "es", "etwas", "euer", "eure", "eurem", "euren", "eurer", "eures",
+        "für", "gegen", "gewesen", "hab", "habe", "haben", "hat", "hatte", "hatten", "hier",
+        "hin", "hinter", "ich", "mich", "mir", "ihr", "ihre", "ihrem", "ihren", "ihrer",
+        "ihres", "euch", "im", "in", "indem", "ins", "ist", "jede", "jedem", "jeden", "jeder",
+        "jedes", "jene", "jenem", "jenen", "jener", "jenes", "jetzt", "kann", "kein", "keine",
+        "keinem", "keinen", "keiner", "keines", "können", "könnte", "machen", "man", "manche",
+        "manchem", "manchen", "mancher", "manches", "mein", "meine", "meinem", "meinen",
+        "meiner", "meines", "mit", "muss", "musste", "nach", "nicht", "nichts", "noch", "nun",
+        "nur", "ob", "oder", "ohne", "sehr", "sein", "seine", "seinem", "seinen", "seiner",
+        "seines", "selbst", "sich", "sie", "ihnen", "sind", "so", "solche", "solchem",
+        "solchen", "solcher", "solches", "soll", "sollte", "sondern", "sonst", "über", "um",
+        "und", "uns", "unse", "unsem", "unsen", "unser", "unses", "unter", "viel", "vom",
+        "von", "vor", "während", "war", "waren", "warst", "was", "weg", "weil", "weiter",
+        "welche", "welchem", "welchen", "welcher", "welches", "wenn", "wer", "werde", "werden",
+        "wie", "wieder", "will", "wir", "wird", "wirst", "wo", "wollen", "wollte", "würde",
+        "würden", "zu", "zum", "zur", "zwar", "zwischen",
+    ]));
+
+    // Italian stopwords
+    map.insert("it", HashSet::from([
+        "a", "adesso", "ai", "al", "alla", "allo", "allora", "altre", "altri", "altro",
+        "anche", "ancora", "avere", "aveva", "avevano", "ben", "buono", "che", "chi",
+        "cinque", "comprare", "con", "consecutivo", "consecutivi", "cosa", "cui", "da",
+        "del", "della", "dello", "dentro", "deve", "devo", "di", "doppio", "due", "e",
+        "ecco", "fare", "fine", "fino", "fra", "gente", "giu", "ha", "hai", "hanno", "ho",
+        "il", "indietro", "invece", "io", "la", "lavoro", "le", "lei", "lo", "loro", "lui",
+        "lungo", "ma", "me", "meglio", "molta", "molti", "molto", "nei", "nella", "no",
+        "noi", "nome", "nostro", "nove", "nuovi", "nuovo", "o", "oltre", "ora", "otto",
+        "peggio", "pero", "persone", "piu", "poco", "primo", "promesso", "qua", "quarto",
+        "quasi", "quattro", "quello", "questo", "qui", "quindi", "quinto", "rispetto",
+        "sara", "secondo", "sei", "sembra", "sembrava", "senza", "sette", "sia", "siamo",
+        "siete", "solo", "sono", "sopra", "soprattutto", "sotto", "stati", "stato", "stesso",
+        "su", "subito", "sul", "sulla", "tanto", "te", "tempo", "terzo", "tra", "tre",
+        "triplo", "ultimo", "un", "una", "uno", "va", "vai", "voi", "volte", "vostro",
+    ]));
+
+    // Portuguese stopwords
+    map.insert("pt", HashSet::from([
+        "a", "agora", "ainda", "alguém", "algum", "alguma", "algumas", "alguns", "ampla",
+        "amplas", "amplo", "amplos", "ante", "antes", "ao", "aos", "após", "aquela",
+        "aquelas", "aquele", "aqueles", "aquilo", "as", "até", "através", "cada", "coisa",
+        "coisas", "com", "como", "contra", "contudo", "da", "daquele", "daqueles", "das",
+        "de", "dela", "delas", "dele", "deles", "depois", "dessa", "dessas", "desse",
+        "desses", "desta", "destas", "deste", "destes", "deve", "devem", "devendo", "dever",
+        "deverá", "deverão", "deveria", "deveriam", "devia", "deviam", "disse", "disso",
+        "disto", "dito", "diz", "dizem", "do", "dos", "e", "é", "ela", "elas", "ele", "eles",
+        "em", "enquanto", "entre", "era", "essa", "essas", "esse", "esses", "esta", "está",
+        "estamos", "estão", "estas", "estava", "estavam", "estávamos", "este", "estes",
+        "estou", "eu", "fazendo", "fazer", "feita", "feitas", "feito", "feitos", "foi",
+        "for", "foram", "fosse", "fossem", "grande", "grandes", "há", "isso", "isto", "já",
+        "la", "lá", "lhe", "lhes", "lo", "mas", "me", "mesma", "mesmas", "mesmo", "mesmos",
+        "meu", "meus", "minha", "minhas", "muita", "muitas", "muito", "muitos", "na", "não",
+        "nas", "nem", "nenhum", "nessa", "nessas", "nesta", "nestas", "ninguém", "no", "nos",
+        "nós", "nossa", "nossas", "nosso", "nossos", "num", "numa", "nunca", "o", "os", "ou",
+        "outra", "outras", "outro", "outros", "para", "pela", "pelas", "pelo", "pelos",
+        "pequena", "pequenas", "pequeno", "pequenos", "per", "perante", "pode", "pude",
+        "podendo", "poder", "poderia", "poderiam", "podia", "podiam", "pois", "por", "porém",
+        "porque", "posso", "pouca", "poucas", "pouco", "poucos", "primeiro", "primeiros",
+        "própria", "próprias", "próprio", "próprios", "quais", "qual", "quando", "quanto",
+        "quantos", "que", "quem", "são", "se", "seja", "sejam", "sem", "sempre", "sendo",
+        "será", "serão", "seu", "seus", "si", "sido", "só", "sob", "sobre", "sua", "suas",
+        "tal", "talvez", "também", "tampouco", "te", "tem", "tendo", "tenha", "tenham",
+        "temos", "tenho", "terá", "terão", "terceira", "terceiro", "ti", "tido", "tinha",
+        "tinham", "toda", "todas", "todavia", "todo", "todos", "tu", "tua", "tuas", "tudo",
+        "última", "últimas", "último", "últimos", "um", "uma", "umas", "uns", "vendo", "ver",
+        "vez", "vindo", "vir", "vos", "vós", "vossa", "vossas", "vosso", "vossos",
+    ]));
+
+    map
+});

@@ -13,6 +13,7 @@ from fenic.core._serde.proto.expressions import (  # noqa: F401
     embedding,
     json,
     markdown,
+    nlp,
     semantic,
     text,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "embedding",
     "json",
     "markdown",
+    "nlp",
     "semantic",
     "text",
 ]

@@ -109,6 +109,10 @@ from fenic.core._logical_plan.expressions import (
     MdGenerateTocExpr,
     MdGetCodeBlocksExpr,
     MdToJsonExpr,
+    DetectLanguageExpr,
+    DetectLanguageWithConfidenceExpr,
+    RemoveCustomStopwordsExpr,
+    RemoveStopwordsExpr,
     MilliSecondExpr,
     MinExpr,
     MinuteExpr,
@@ -1330,6 +1334,30 @@ class ExprConverter:
             .list.get(0)
             .dtypes.cast(source_dtype, dest_dtype)
         )
+
+    # NLP text preprocessing expressions
+
+    @_convert_expr.register(RemoveStopwordsExpr)
+    def _convert_remove_stopwords_expr(self, logical: RemoveStopwordsExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        language_expr = self._convert_expr(logical.language)
+        return physical_expr.nlp.remove_stopwords(language_expr)
+
+    @_convert_expr.register(RemoveCustomStopwordsExpr)
+    def _convert_remove_custom_stopwords_expr(self, logical: RemoveCustomStopwordsExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        stopwords_expr = self._convert_expr(logical.stopwords)
+        return physical_expr.nlp.remove_custom_stopwords(stopwords_expr)
+
+    @_convert_expr.register(DetectLanguageExpr)
+    def _convert_detect_language_expr(self, logical: DetectLanguageExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        return physical_expr.nlp.detect_language()
+
+    @_convert_expr.register(DetectLanguageWithConfidenceExpr)
+    def _convert_detect_language_with_confidence_expr(self, logical: DetectLanguageWithConfidenceExpr) -> pl.Expr:
+        physical_expr = self._convert_expr(logical.expr)
+        return physical_expr.nlp.detect_language_with_confidence()
 
 
     @_convert_expr.register(EmbeddingNormalizeExpr)

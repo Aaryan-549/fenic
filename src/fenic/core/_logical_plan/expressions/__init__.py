@@ -186,6 +186,18 @@ from fenic.core._logical_plan.expressions.markdown import (
 from fenic.core._logical_plan.expressions.markdown import (
     MdToJsonExpr as MdToJsonExpr,
 )
+from fenic.core._logical_plan.expressions.nlp import (
+    DetectLanguageExpr as DetectLanguageExpr,
+)
+from fenic.core._logical_plan.expressions.nlp import (
+    DetectLanguageWithConfidenceExpr as DetectLanguageWithConfidenceExpr,
+)
+from fenic.core._logical_plan.expressions.nlp import (
+    RemoveCustomStopwordsExpr as RemoveCustomStopwordsExpr,
+)
+from fenic.core._logical_plan.expressions.nlp import (
+    RemoveStopwordsExpr as RemoveStopwordsExpr,
+)
 from fenic.core._logical_plan.expressions.semantic import (
     AnalyzeSentimentExpr as AnalyzeSentimentExpr,
 )

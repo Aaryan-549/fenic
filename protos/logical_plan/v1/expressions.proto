@@ -133,6 +133,12 @@ message LogicalExpr {
     MdGenerateTocExpr md_generate_toc = 92;
     MdExtractHeaderChunks md_extract_header_chunks = 93;
 
+    // NLP text preprocessing expressions
+    RemoveStopwordsExpr remove_stopwords = 94;
+    RemoveCustomStopwordsExpr remove_custom_stopwords = 95;
+    DetectLanguageExpr detect_language = 96;
+    DetectLanguageWithConfidenceExpr detect_language_with_confidence = 97;
+
     // Case expressions
     WhenExpr when = 100;
     OtherwiseExpr otherwise = 101;
@@ -660,6 +666,25 @@ message MdGenerateTocExpr {
 message MdExtractHeaderChunks {
   LogicalExpr expr = 1;
   int32 header_level = 2;
+}
+
+// NLP text preprocessing expressions
+message RemoveStopwordsExpr {
+  LogicalExpr expr = 1;
+  LogicalExpr language = 2;
+}
+
+message RemoveCustomStopwordsExpr {
+  LogicalExpr expr = 1;
+  LogicalExpr stopwords = 2;
+}
+
+message DetectLanguageExpr {
+  LogicalExpr expr = 1;
+}
+
+message DetectLanguageWithConfidenceExpr {
+  LogicalExpr expr = 1;
 }
 
 // Case expressions

@@ -28,6 +28,7 @@ jaq-std = "2.1.1"
 markdown = "1.0.0"
 minijinja = "2.11.0"
 rapidfuzz = "0.5.0"
+whatlang = "0.16.4"
 
 [dev-dependencies]
 criterion = "0.5.1"

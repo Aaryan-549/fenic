@@ -1430,3 +1430,174 @@ def compute_fuzzy_token_set_ratio(column: ColumnOrName, other: Union[Column, str
         other_expr = other._logical_expr
 
     return Column._from_logical_expr(FuzzyTokenSetRatioExpr(Column._from_col_or_name(column)._logical_expr, other_expr, method))
+
+
+# NLP Text Preprocessing Functions
+
+@validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
+def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopwords: Optional[List[str]] = None) -> Column:
+    """Remove stopwords from text while preserving meaningful content.
+
+    Filters out common stopwords (e.g., "the", "is", "at") based on the specified language.
+    Stopword removal is case-insensitive and operates on whitespace-tokenized words.
+
+    Args:
+        column: Input text column to process
+        language: ISO 639-1 language code. Supported languages:
+            - "en" (English)
+            - "es" (Spanish)
+            - "fr" (French)
+            - "de" (German)
+            - "it" (Italian)
+            - "pt" (Portuguese)
+        custom_stopwords: Optional list of additional stopwords to remove (case-insensitive)
+
+    Returns:
+        Text column with stopwords removed, separated by single spaces
+
+    Notes:
+        - Null input returns null output
+        - Empty strings return empty strings
+        - Stopword matching is case-insensitive
+        - Words are split on whitespace
+        - Resulting text has single spaces between words
+        - Punctuation is not automatically removed or normalized
+
+    Example: Basic stopword removal
+        ```python
+        import fenic as fc
+
+        df = fc.DataFrame({"text": [
+            "The quick brown fox jumps over the lazy dog",
+            "Machine learning is a subset of artificial intelligence"
+        ]})
+
+        # Remove English stopwords
+        df.select(fc.text.remove_stopwords(fc.col("text")))
+        # Result: ["quick brown fox jumps lazy dog", "Machine learning subset artificial intelligence"]
+        ```
+
+    Example: Spanish stopword removal
+        ```python
+        df = fc.DataFrame({"text": ["El rápido zorro marrón"]})
+        df.select(fc.text.remove_stopwords(fc.col("text"), language="es"))
+        # Result: ["rápido zorro marrón"]
+        ```
+
+    Example: Custom stopwords
+        ```python
+        df = fc.DataFrame({"text": ["The company product launched yesterday"]})
+        df.select(fc.text.remove_stopwords(fc.col("text"), custom_stopwords=["company", "product"]))
+        # Result: ["quick brown fox"]
+        ```
+
+    Example: Preprocessing for embeddings
+        ```python
+        # Clean text before generating embeddings
+        df = df.with_column(
+            "clean_text",
+            fc.text.remove_stopwords(fc.text.lower(fc.col("content")))
+        )
+        df = df.with_column(
+            "embeddings",
+            fc.semantic.embed(fc.col("clean_text"))
+        )
+        ```
+    """
+    from fenic.core._logical_plan.expressions.nlp import RemoveCustomStopwordsExpr, RemoveStopwordsExpr
+
+    column_expr = Column._from_col_or_name(column)._logical_expr
+
+    if custom_stopwords is not None:
+        # Combine language stopwords with custom stopwords
+        stopwords_list = list(custom_stopwords)
+        stopwords_expr = LiteralExpr(stopwords_list, ArrayType(StringType))
+        return Column._from_logical_expr(RemoveCustomStopwordsExpr(column_expr, stopwords_expr))
+    else:
+        # Use language-based stopwords
+        language_expr = LiteralExpr(language, StringType)
+        return Column._from_logical_expr(RemoveStopwordsExpr(column_expr, language_expr))
+
+
+@validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
+def detect_language(column: ColumnOrName, return_confidence: bool = False) -> Column:
+    """Detect the language of text content using statistical models.
+
+    Uses the whatlang library for fast, accurate language detection based on
+    character n-grams and statistical analysis.
+
+    Args:
+        column: Input text column to analyze
+        return_confidence: If True, returns a struct with {language: str, confidence: float}.
+                         If False, returns just the language code string (default).
+
+    Returns:
+        If return_confidence=False: String column with ISO 639-1 language codes
+        If return_confidence=True: Struct column with 'language' (str) and 'confidence' (float 0-1) fields
+        Returns null if language cannot be detected or input is null/empty
+
+    Notes:
+        - Detection works best with longer text (at least 20-30 characters)
+        - Very short text or gibberish may return null
+        - Null or empty input returns null
+        - Confidence scores range from 0.0 to 1.0
+
+    Example: Simple language detection
+        ```python
+        import fenic as fc
+
+        df = fc.DataFrame({"text": [
+            "The quick brown fox jumps over the lazy dog",
+            "El rápido zorro marrón salta sobre el perro perezoso",
+            "Le rapide renard brun saute par-dessus le chien paresseux"
+        ]})
+
+        df.select(fc.text.detect_language(fc.col("text")))
+        # Result: ["en", "es", "fr"]
+        ```
+
+    Example: Detection with confidence scores
+        ```python
+        df.select(fc.text.detect_language(fc.col("text"), return_confidence=True))
+        # Result: [
+        #   {"language": "en", "confidence": 0.95},
+        #   {"language": "es", "confidence": 0.92},
+        #   {"language": "fr", "confidence": 0.89}
+        # ]
+        ```
+
+    Example: Filter by language
+        ```python
+        # Detect language and filter for English documents
+        df = df.with_column("language", fc.text.detect_language(fc.col("content")))
+        english_df = df.filter(fc.col("language") == "en")
+        ```
+
+    Example: Multi-language processing
+        ```python
+        # Apply language-specific preprocessing
+        df = df.with_column("language", fc.text.detect_language(fc.col("text")))
+        df = df.with_column(
+            "clean_text",
+            fc.when(fc.col("language") == "en", fc.text.remove_stopwords(fc.col("text"), language="en"))
+              .when(fc.col("language") == "es", fc.text.remove_stopwords(fc.col("text"), language="es"))
+              .when(fc.col("language") == "fr", fc.text.remove_stopwords(fc.col("text"), language="fr"))
+              .otherwise(fc.col("text"))
+        )
+        ```
+
+    Example: High-confidence filtering
+        ```python
+        # Only process documents with high confidence detection
+        df = df.with_column("lang_info", fc.text.detect_language(fc.col("text"), return_confidence=True))
+        high_confidence = df.filter(fc.col("lang_info")["confidence"] > 0.8)
+        ```
+    """
+    from fenic.core._logical_plan.expressions.nlp import DetectLanguageExpr, DetectLanguageWithConfidenceExpr
+
+    column_expr = Column._from_col_or_name(column)._logical_expr
+
+    if return_confidence:
+        return Column._from_logical_expr(DetectLanguageWithConfidenceExpr(column_expr))
+    else:
+        return Column._from_logical_expr(DetectLanguageExpr(column_expr))
