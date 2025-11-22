@@ -1488,7 +1488,7 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
         ```python
         df = fc.DataFrame({"text": ["The company product launched yesterday"]})
         df.select(fc.text.remove_stopwords(fc.col("text"), custom_stopwords=["company", "product"]))
-        # Result: ["quick brown fox"]
+        # Result: ["The launched yesterday"]
         ```
 
     Example: Preprocessing for embeddings
