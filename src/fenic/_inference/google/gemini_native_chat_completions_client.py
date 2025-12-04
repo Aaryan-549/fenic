@@ -1,6 +1,9 @@
 import logging
 from functools import cache
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
+
+if TYPE_CHECKING:
+    from fenic._inference.cache.protocol import LLMResponseCache
 
 from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
@@ -12,6 +15,7 @@ from google.genai.types import (
 
 from fenic._inference.google.gemini_token_counter import GeminiLocalTokenCounter
 from fenic._inference.google.google_profile_manager import (
+    GoogleCompletionsProfileConfig,
     GoogleCompletionsProfileManager,
 )
 from fenic._inference.google.google_provider import (
@@ -27,11 +31,11 @@ from fenic._inference.model_client import (
     ModelClient,
     TransientException,
 )
+from fenic._inference.profile_hash_mixin import ProfileHashMixin
 from fenic._inference.rate_limit_strategy import (
     TokenEstimate,
     UnifiedTokenRateLimitStrategy,
 )
-from fenic._inference.request_utils import generate_completion_request_key
 from fenic._inference.token_counter import Tokenizable
 from fenic._inference.types import (
     FenicCompletionsRequest,
@@ -51,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiNativeChatCompletionsClient(
-    ModelClient[FenicCompletionsRequest, FenicCompletionsResponse]
+    ProfileHashMixin, ModelClient[FenicCompletionsRequest, FenicCompletionsResponse]
 ):
     """Native (google-genai) Google Gemini chat-completions client.
 
@@ -71,6 +75,7 @@ class GeminiNativeChatCompletionsClient(
         max_backoffs: int = 10,
         profiles: Optional[dict[str, ResolvedGoogleModelProfile]] = None,
         default_profile_name: Optional[str] = None,
+        cache: Optional["LLMResponseCache"] = None,
     ):
         """Initialize the Gemini native chat completions client.
 
@@ -82,16 +87,20 @@ class GeminiNativeChatCompletionsClient(
             max_backoffs: Maximum number of retry backoffs
             profiles: Dictionary of profile configurations
             default_profile_name: Name of the default profile to use
+            cache: Optional LLM response cache
         """
         token_counter = GeminiLocalTokenCounter(model_name=model)
         super().__init__(
             model=model,
             model_provider=model_provider,
-            model_provider_class=GoogleDeveloperModelProvider() if model_provider == ModelProvider.GOOGLE_DEVELOPER else GoogleVertexModelProvider(),
+            model_provider_class=GoogleDeveloperModelProvider()
+            if model_provider == ModelProvider.GOOGLE_DEVELOPER
+            else GoogleVertexModelProvider(),
             rate_limit_strategy=rate_limit_strategy,
             queue_size=queue_size,
             max_backoffs=max_backoffs,
             token_counter=token_counter,
+            cache=cache,
         )
 
         self._client = self.model_provider_class.create_aio_client()
@@ -106,6 +115,7 @@ class GeminiNativeChatCompletionsClient(
             profile_configurations=profiles,
             default_profile_name=default_profile_name,
         )
+
 
     def reset_metrics(self):
         """Reset metrics to initial state."""
@@ -132,17 +142,6 @@ class GeminiNativeChatCompletionsClient(
         """
         # Re-expose for mypy – same implementation as parent.
         return super().count_tokens(messages, ignore_file=ignore_file)
-
-    def get_request_key(self, request: FenicCompletionsRequest) -> str:
-        """Generate a unique key for the request.
-
-        Args:
-            request: The completion request
-
-        Returns:
-            Unique request key for caching
-        """
-        return generate_completion_request_key(request)
 
     def estimate_tokens_for_request(self, request: FenicCompletionsRequest):
         """Estimate the number of tokens for a request.
@@ -185,7 +184,9 @@ class GeminiNativeChatCompletionsClient(
             Completion response, transient exception, or fatal exception
         """
 
-        profile_config = self._profile_manager.get_profile_by_name(request.model_profile)
+        profile_config = self._profile_manager.get_profile_by_name(
+            request.model_profile
+        )
         generation_config: GenerateContentConfigDict = {
             "temperature": request.temperature,
             "response_logprobs": request.top_logprobs is not None,
@@ -217,7 +218,9 @@ class GeminiNativeChatCompletionsClient(
         file_obj = None
         try:
             # Build generation parameters and upload any files to Google's file store
-            contents, file_obj = await convert_messages_and_upload_files(self._client, request.messages)
+            contents, file_obj = await convert_messages_and_upload_files(
+                self._client, request.messages
+            )
 
             response: GenerateContentResponse = (
                 await self._client.models.generate_content(
@@ -326,7 +329,9 @@ class GeminiNativeChatCompletionsClient(
                 await delete_file(self._client, file_obj.name)
 
     @cache  # noqa: B019 – builtin cache OK here.
-    def _estimate_response_schema_tokens(self, response_format: ResolvedResponseFormat) -> int:
+    def _estimate_response_schema_tokens(
+        self, response_format: ResolvedResponseFormat
+    ) -> int:
         """Estimate token count for a response format schema.
 
         Uses Google's tokenizer to count tokens in a JSON schema representation
@@ -341,7 +346,9 @@ class GeminiNativeChatCompletionsClient(
         schema_str = response_format.schema_fingerprint
         return self._token_counter.count_tokens(schema_str)
 
-    def _estimate_structured_output_overhead(self, response_format: ResolvedResponseFormat) -> int:
+    def _estimate_structured_output_overhead(
+        self, response_format: ResolvedResponseFormat
+    ) -> int:
         """Use Google-specific response schema token estimation.
 
         Args:
@@ -357,21 +364,35 @@ class GeminiNativeChatCompletionsClient(
         estimated_output_tokens = request.max_completion_tokens or 0
         if request.max_completion_tokens is None and request.messages.user_file:
             # TODO(DY): the semantic operator should dictate how the file affects the token estimate
-            estimated_output_tokens = self.token_counter.count_file_output_tokens(request.messages)
-        return estimated_output_tokens + self._get_expected_additional_reasoning_tokens(request)
+            estimated_output_tokens = self.token_counter.count_file_output_tokens(
+                request.messages
+            )
+        return estimated_output_tokens + self._get_expected_additional_reasoning_tokens(
+            request
+        )
 
-    def _get_max_output_token_request_limit(self, request: FenicCompletionsRequest) -> Optional[int]:
+    def _get_max_output_token_request_limit(
+        self, request: FenicCompletionsRequest
+    ) -> Optional[int]:
         """Get the upper limit of output tokens for a request.
 
         Returns None if max_completion_tokens is not provided (no limit should be set).
         If max_completion_tokens is provided, includes the thinking token budget with a safety margin."""
         if request.max_completion_tokens is None:
             return None
-        return request.max_completion_tokens + self._get_expected_additional_reasoning_tokens(request)
-
-    def _get_expected_additional_reasoning_tokens(self, request: FenicCompletionsRequest) -> int:
-        """Get the expected additional reasoning tokens for a request.  Include a safety margin."""
-        profile_config = self._profile_manager.get_profile_by_name(request.model_profile)
-        return int(
-            1.5 * profile_config.thinking_token_budget
+        return (
+            request.max_completion_tokens
+            + self._get_expected_additional_reasoning_tokens(request)
         )
+
+    def _get_expected_additional_reasoning_tokens(
+        self, request: FenicCompletionsRequest
+    ) -> int:
+        """Get the expected additional reasoning tokens for a request.  Include a safety margin."""
+        profile_config = self._profile_manager.get_profile_by_name(
+            request.model_profile
+        )
+        return int(1.5 * profile_config.thinking_token_budget)
+
+    def _resolve_profile_for_hash(self, profile_name: Optional[str]) -> GoogleCompletionsProfileConfig:
+        return self._profile_manager.get_profile_by_name(profile_name)

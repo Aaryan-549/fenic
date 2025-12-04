@@ -1,10 +1,10 @@
-import hashlib
 import logging
 from typing import List, Optional, Union
 
 import cohere
 
 from fenic._inference.cohere.cohere_profile_manager import (
+    CohereEmbeddingsProfileConfiguration,
     CohereEmbeddingsProfileManager,
 )
 from fenic._inference.cohere.cohere_provider import CohereModelProvider
@@ -13,6 +13,7 @@ from fenic._inference.model_client import (
     ModelClient,
     TransientException,
 )
+from fenic._inference.profile_hash_mixin import ProfileHashMixin
 from fenic._inference.rate_limit_strategy import (
     TokenEstimate,
     UnifiedTokenRateLimitStrategy,
@@ -26,7 +27,9 @@ from fenic.core.metrics import RMMetrics
 logger = logging.getLogger(__name__)
 
 
-class CohereBatchEmbeddingsClient(ModelClient[FenicEmbeddingsRequest, List[float]]):
+class CohereBatchEmbeddingsClient(
+    ProfileHashMixin, ModelClient[FenicEmbeddingsRequest, List[float]]
+):
     """Client for making batch requests to Cohere's embeddings API."""
 
     def __init__(
@@ -71,6 +74,8 @@ class CohereBatchEmbeddingsClient(ModelClient[FenicEmbeddingsRequest, List[float
             profile_configurations=profile_configurations,
             default_profile_name=default_profile_name,
         )
+
+
 
     async def make_single_request(
         self, request: FenicEmbeddingsRequest
@@ -137,26 +142,6 @@ class CohereBatchEmbeddingsClient(ModelClient[FenicEmbeddingsRequest, List[float
             # Catch-all for other errors
             return TransientException(e)
 
-    def get_request_key(self, request: FenicEmbeddingsRequest) -> str:
-        """Generate a unique key for request deduplication.
-        
-        Args:
-            request: The request to generate a key for
-            
-        Returns:
-            A unique key for the request
-        """
-        # Include preset information in the key for proper deduplication
-        profile_config = self._profile_manager.get_profile_by_name(request.model_profile)
-        key_components = [
-            request.doc,
-            str(profile_config.output_dimensionality),
-            profile_config.input_type,
-            "float" # We only support float embeddings
-        ]
-        combined_key = "|".join(key_components)
-        return hashlib.sha256(combined_key.encode()).hexdigest()[:10]
-
     def estimate_tokens_for_request(self, request: FenicEmbeddingsRequest) -> TokenEstimate:
         """Estimate the number of tokens for a request.
         
@@ -190,3 +175,6 @@ class CohereBatchEmbeddingsClient(ModelClient[FenicEmbeddingsRequest, List[float
             The current metrics
         """
         return self._metrics
+
+    def _resolve_profile_for_hash(self, profile_name: Optional[str]) -> CohereEmbeddingsProfileConfiguration:
+        return self._profile_manager.get_profile_by_name(profile_name)
