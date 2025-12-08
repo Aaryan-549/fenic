@@ -223,7 +223,6 @@ pub static STOPWORDS: LazyLock<HashMap<&'static str, HashSet<&'static str>>> =
                 "para",
                 "atras",
                 "porque",
-                "por qué",
                 "estado",
                 "estaba",
                 "ante",
