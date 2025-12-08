@@ -50,7 +50,8 @@ fn remove_stopwords(inputs: &[Series]) -> PolarsResult<Series> {
                     "Unsupported language code '{}'. Supported languages: {}",
                     lang_opt.unwrap(),
                     STOPWORDS.keys().cloned().collect::<Vec<_>>().join(", ")
-                ).into(),
+                )
+                .into(),
             ));
         }
 
@@ -67,7 +68,8 @@ fn remove_stopwords(inputs: &[Series]) -> PolarsResult<Series> {
                             "Unsupported language code '{}'. Supported languages: {}",
                             lang,
                             STOPWORDS.keys().cloned().collect::<Vec<_>>().join(", ")
-                        ).into(),
+                        )
+                        .into(),
                     ));
                 }
                 set
@@ -99,7 +101,7 @@ fn remove_stopwords(inputs: &[Series]) -> PolarsResult<Series> {
                 Some(filtered.join(" "))
             }
             (Some(text), None) => Some(text.to_string()), // No stopwords, return original
-            _ => None, // If text is null, return null
+            _ => None,                                    // If text is null, return null
         };
 
         result_vec.push(value);
@@ -148,7 +150,7 @@ fn remove_custom_stopwords(inputs: &[Series]) -> PolarsResult<Series> {
                 Some(filtered.join(" "))
             }
             (Some(text), None) => Some(text.to_string()), // No stopwords, return original
-            _ => None, // If text is null, return null
+            _ => None,                                    // If text is null, return null
         };
 
         result_vec.push(value);
@@ -231,13 +233,15 @@ fn detect_language_with_confidence(inputs: &[Series]) -> PolarsResult<Series> {
     // Create struct with language and confidence fields
     let language_series = StringChunked::from_iter_options(
         PlSmallStr::from_static("language"),
-        language_vec.into_iter()
-    ).into_series();
+        language_vec.into_iter(),
+    )
+    .into_series();
 
     let confidence_series = Float64Chunked::from_iter_options(
         PlSmallStr::from_static("confidence"),
-        confidence_vec.into_iter()
-    ).into_series();
+        confidence_vec.into_iter(),
+    )
+    .into_series();
 
     let struct_chunked = StructChunked::from_series(
         PlSmallStr::EMPTY,
