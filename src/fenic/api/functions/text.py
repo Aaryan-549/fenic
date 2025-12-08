@@ -1441,8 +1441,12 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
     Filters out common stopwords (e.g., "the", "is", "at") based on the specified language.
     Stopword removal is case-insensitive and operates on whitespace-tokenized words.
 
+    Stopword lists are based on commonly used NLP corpora, similar to NLTK's stopwords
+    collections, containing 100-200+ high-frequency words per language that typically
+    add little semantic value.
+
     Args:
-        column: Input text column to process
+        column: Input text column to process (String, Markdown, or JSON columns supported)
         language: ISO 639-1 language code. Supported languages:
             - "en" (English)
             - "es" (Spanish)
@@ -1455,15 +1459,17 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
             and only the specified custom stopwords are removed.
 
     Returns:
-        Text column with stopwords removed, separated by single spaces
+        Text column with stopwords removed, separated by single spaces. Multiple consecutive
+        stopwords are collapsed into a single space.
 
     Notes:
         - Null input returns null output
         - Empty strings return empty strings
         - Stopword matching is case-insensitive
         - Words are split on whitespace
-        - Resulting text has single spaces between words
+        - Resulting text has single spaces between words (multiple removed stopwords collapse to one space)
         - Punctuation is not automatically removed or normalized
+        - Works with String, Markdown, and JSON string columns
 
     Example: Basic stopword removal
         ```python
@@ -1506,7 +1512,10 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
         )
         ```
     """
-    from fenic.core._logical_plan.expressions.nlp import RemoveCustomStopwordsExpr, RemoveStopwordsExpr
+    from fenic.core._logical_plan.expressions.nlp import (
+        RemoveCustomStopwordsExpr,
+        RemoveStopwordsExpr,
+    )
 
     column_expr = Column._from_col_or_name(column)._logical_expr
 
@@ -1595,7 +1604,10 @@ def detect_language(column: ColumnOrName, return_confidence: bool = False) -> Co
         high_confidence = df.filter(fc.col("lang_info")["confidence"] > 0.8)
         ```
     """
-    from fenic.core._logical_plan.expressions.nlp import DetectLanguageExpr, DetectLanguageWithConfidenceExpr
+    from fenic.core._logical_plan.expressions.nlp import (
+        DetectLanguageExpr,
+        DetectLanguageWithConfidenceExpr,
+    )
 
     column_expr = Column._from_col_or_name(column)._logical_expr
 

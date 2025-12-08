@@ -3,7 +3,16 @@
 import pytest
 
 from fenic import col, text
-from fenic.core.error import ValidationError
+
+
+# Test data constants
+ENGLISH_TEXT_1 = "The quick brown fox jumps over the lazy dog"
+ENGLISH_TEXT_1_CLEANED = "quick brown fox jumps lazy dog"
+
+ENGLISH_TEXT_2 = "Machine learning is a subset of artificial intelligence"
+ENGLISH_TEXT_2_CLEANED = "Machine learning subset artificial intelligence"
+
+ENGLISH_TEXT_3 = "This is a test sentence with many stopwords"
 
 
 @pytest.fixture
@@ -11,9 +20,9 @@ def stopwords_test_df(local_session):
     """DataFrame with text for stopword removal testing."""
     data = {
         "text": [
-            "The quick brown fox jumps over the lazy dog",
-            "Machine learning is a subset of artificial intelligence",
-            "This is a test sentence with many stopwords",
+            ENGLISH_TEXT_1,
+            ENGLISH_TEXT_2,
+            ENGLISH_TEXT_3,
             None,  # Test null handling
             "",  # Test empty string
         ]
@@ -43,18 +52,9 @@ def test_remove_stopwords_english(stopwords_test_df):
         text.remove_stopwords(col("text"))
     ).to_polars()
 
-    # "The", "over", "the" should be removed
-    assert "The" not in result["text"][0]
-    assert "quick" in result["text"][0]
-    assert "brown" in result["text"][0]
-    assert "fox" in result["text"][0]
-
-    # "is", "a", "of" should be removed
-    assert "Machine" in result["text"][1]
-    assert "learning" in result["text"][1]
-    assert "subset" in result["text"][1]
-    assert "artificial" in result["text"][1]
-    assert "intelligence" in result["text"][1]
+    # Check cleaned text matches expected output
+    assert result["text"][0] == ENGLISH_TEXT_1_CLEANED
+    assert result["text"][1] == ENGLISH_TEXT_2_CLEANED
 
     # Test null handling
     assert result["text"][3] is None
@@ -117,7 +117,9 @@ def test_remove_custom_stopwords(stopwords_test_df):
 
 def test_remove_stopwords_invalid_language(stopwords_test_df):
     """Test that invalid language code raises an error."""
-    with pytest.raises(Exception):  # Should raise ValidationError or PolarsError
+    from polars.exceptions import ComputeError
+
+    with pytest.raises(ComputeError, match="Unsupported language code"):
         stopwords_test_df.select(
             text.remove_stopwords(col("text"), language="invalid")
         ).collect()
@@ -288,3 +290,32 @@ def test_detect_language_short_text(local_session):
     # Just verify it doesn't crash and returns string or null
     for i in range(4):
         assert result["language"][i] is None or isinstance(result["language"][i], str)
+
+
+def test_remove_stopwords_markdown_column(local_session):
+    """Test stopword removal on markdown columns."""
+    from fenic import markdown
+
+    markdown_text = """# This is a heading
+
+This is a paragraph with the many stopwords that should be removed.
+
+## Another section
+
+More text with stopwords."""
+
+    data = {"markdown": [markdown_text]}
+    df = local_session.create_dataframe(data)
+
+    # Convert to string and remove stopwords
+    result = df.select(
+        text.remove_stopwords(col("markdown")).alias("cleaned")
+    ).to_polars()
+
+    cleaned = result["cleaned"][0]
+
+    # Verify stopwords are removed
+    assert "is" not in cleaned.lower() or cleaned.lower().count("is") < markdown_text.lower().count("is")
+    assert "paragraph" in cleaned
+    assert "stopwords" in cleaned
+    assert "removed" in cleaned
