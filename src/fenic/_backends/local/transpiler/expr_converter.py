@@ -127,7 +127,6 @@ from fenic.core._logical_plan.expressions import (
     RegexpInstrExpr,
     RegexpSplitExpr,
     RegexpSubstrExpr,
-    RemoveCustomStopwordsExpr,
     RemoveStopwordsExpr,
     ReplaceExpr,
     RLikeExpr,
@@ -186,26 +185,30 @@ from fenic.core.types.enums import FuzzySimilarityMethod
 
 logger = logging.getLogger(__name__)
 
+
 class ExprConverter:
     def __init__(self, session_state: LocalSessionState):
         self.session_state = session_state
 
     def convert(
-        self, logical: LogicalExpr,
+        self,
+        logical: LogicalExpr,
         with_alias: bool = True,
     ) -> pl.Expr:
         """Convert a logical expression to a Polars physical expression with aliasing."""
         result = self._convert_expr(logical)
-        if isinstance(logical, AliasExpr) or isinstance(logical, ColumnExpr) or not with_alias:
+        if (
+            isinstance(logical, AliasExpr)
+            or isinstance(logical, ColumnExpr)
+            or not with_alias
+        ):
             return result
         return self._with_alias(result, logical)
-
 
     @singledispatchmethod
     def _convert_expr(self, logical: LogicalExpr) -> pl.Expr:
         """Convert a logical expression to a Polars physical expression without aliasing."""
         raise NotImplementedError(f"Conversion not implemented for {type(logical)}")
-
 
     def _with_alias(self, expr: pl.Expr, logical: Any) -> pl.Expr:
         """Add an alias to a Polars expression based on the string representation of the logical expression."""
@@ -215,7 +218,6 @@ class ExprConverter:
     def _convert_column_expr(self, logical: ColumnExpr) -> pl.Expr:
         return pl.col(logical.name)
 
-
     @_convert_expr.register
     def _convert_literal_expr(self, logical: LiteralExpr) -> pl.Expr:
         def _literal_to_polars_expr(value: Any, data_type: DataType) -> pl.Expr:
@@ -223,27 +225,33 @@ class ExprConverter:
                 return pl.lit(None, dtype=convert_custom_dtype_to_polars(data_type))
 
             if isinstance(data_type, _TimestampType):
-                return pl.lit(_pytype_datetime_to_utc(value), dtype=pl.Datetime(time_zone="UTC"))
+                return pl.lit(
+                    _pytype_datetime_to_utc(value), dtype=pl.Datetime(time_zone="UTC")
+                )
 
             if isinstance(data_type, _PrimitiveType):
                 return pl.lit(value, dtype=convert_custom_dtype_to_polars(data_type))
 
             if isinstance(data_type, ArrayType):
-                elems = [_literal_to_polars_expr(v, data_type.element_type) for v in value]
+                elems = [
+                    _literal_to_polars_expr(v, data_type.element_type) for v in value
+                ]
                 if not elems:
                     return pl.lit([], dtype=convert_custom_dtype_to_polars(data_type))
                 return pl.concat_list(elems)
 
             if isinstance(data_type, StructType):
                 fields = [
-                    _literal_to_polars_expr(value.get(field.name), field.data_type).alias(
-                        field.name
-                    )
+                    _literal_to_polars_expr(
+                        value.get(field.name), field.data_type
+                    ).alias(field.name)
                     for field in data_type.struct_fields
                 ]
                 return pl.struct(fields)
 
-            raise ValueError(f"Unsupported data type {data_type} for literal conversion")
+            raise ValueError(
+                f"Unsupported data type {data_type} for literal conversion"
+            )
 
         return _literal_to_polars_expr(logical.literal, logical.data_type)
 
@@ -261,18 +269,18 @@ class ExprConverter:
         return pl.lit(logical.series)
 
     @_convert_expr.register
-    def _convert_unresolved_literal_expr(self, logical: UnresolvedLiteralExpr) -> pl.Expr:
+    def _convert_unresolved_literal_expr(
+        self, logical: UnresolvedLiteralExpr
+    ) -> pl.Expr:
         raise InternalError(
             f"An unresolved literal expression was found in the plan: {logical}, which was not expected. "
             "All unresolved literal expressions should have been resolved by the binder."
         )
 
-
     @_convert_expr.register
     def _convert_alias_expr(self, logical: AliasExpr) -> pl.Expr:
         base_expr = self._convert_expr(logical.expr)
         return base_expr.alias(logical.name)
-
 
     @_convert_expr.register
     def _convert_arithmetic_expr(self, logical: ArithmeticExpr) -> pl.Expr:
@@ -291,13 +299,11 @@ class ExprConverter:
         else:
             raise NotImplementedError(f"Unsupported arithmetic operator: {logical.op}")
 
-
     @_convert_expr.register
     def _convert_sort_expr(self, logical: SortExpr) -> pl.Expr:
         raise ValueError(
             "asc and desc() expressions can only be used in sort or order_by operations."
         )
-
 
     def _handle_comparison_expr(self, logical) -> pl.Expr:
         left = self._convert_expr(logical.left)
@@ -319,7 +325,6 @@ class ExprConverter:
         else:
             raise NotImplementedError(f"Unsupported comparison operator: {logical.op}")
 
-
     @_convert_expr.register(BooleanExpr)
     @_convert_expr.register(EqualityComparisonExpr)
     @_convert_expr.register(NumericComparisonExpr)
@@ -327,13 +332,13 @@ class ExprConverter:
         result = self._handle_comparison_expr(logical)
         return result
 
-
     def _convert_avg_expr(self, logical: AvgExpr) -> pl.Expr:
         """Convert AvgExpr, handling embeddings specially."""
         converted_expr = self._convert_expr(logical.expr)
 
         # Check if we're averaging embeddings
         if isinstance(logical.input_type, EmbeddingType):
+
             def embedding_avg(series: pl.Series, embedding_dim: int) -> pl.Series:
                 # TODO(rohitrastogi): Benchmark processing each group concurrently using a threadpool.
                 # NumPy's mean() is already multi-threaded via C bindings, so additional threading may
@@ -358,7 +363,7 @@ class ExprConverter:
                 lambda batch: embedding_avg(batch, logical.input_type.dimensions),
                 return_dtype=pl.Array(pl.Float32, logical.input_type.dimensions),
                 agg_list=True,
-                returns_scalar=True
+                returns_scalar=True,
             )
         else:
             return converted_expr.mean()
@@ -370,12 +375,10 @@ class ExprConverter:
             return self._convert_avg_expr(logical)
 
         agg_handlers = {
-            SumExpr: lambda expr: self._convert_expr(
-                expr.expr
-            ).sum(),
-            SumDistinctExpr: lambda expr: (
-                lambda base: base.unique().sum()
-            )(self._convert_expr(expr.expr)),
+            SumExpr: lambda expr: self._convert_expr(expr.expr).sum(),
+            SumDistinctExpr: lambda expr: (lambda base: base.unique().sum())(
+                self._convert_expr(expr.expr)
+            ),
             MinExpr: lambda expr: self._convert_expr(
                 expr.expr,
             ).min(),
@@ -392,15 +395,9 @@ class ExprConverter:
                 # Match PySpark semantics: ignore nulls
                 self._convert_expr(expr.expr).drop_nulls().approx_n_unique()
             ),
-            ListExpr: lambda expr: self._convert_expr(
-                expr.expr
-            ),
-            FirstExpr: lambda expr: self._convert_expr(
-                expr.expr
-            ).first(),
-            StdDevExpr: lambda expr: self._convert_expr(
-                expr.expr
-            ).std(),
+            ListExpr: lambda expr: self._convert_expr(expr.expr),
+            FirstExpr: lambda expr: self._convert_expr(expr.expr).first(),
+            StdDevExpr: lambda expr: self._convert_expr(expr.expr).std(),
         }
 
         for expr_type, handler in agg_handlers.items():
@@ -408,14 +405,24 @@ class ExprConverter:
                 return handler(logical)
 
         if isinstance(logical, SemanticReduceExpr):
-            group_context_names = list(logical.group_context_exprs.keys()) if logical.group_context_exprs else None
-            polars_exprs = [self._convert_expr(logical.input_expr).alias(DATA_COLUMN_NAME)]
+            group_context_names = (
+                list(logical.group_context_exprs.keys())
+                if logical.group_context_exprs
+                else None
+            )
+            polars_exprs = [
+                self._convert_expr(logical.input_expr).alias(DATA_COLUMN_NAME)
+            ]
             for name, expr in logical.group_context_exprs.items():
                 polars_exprs.append(self._convert_expr(expr).alias(name))
             descending: List[bool] = []
             nulls_last: List[bool] = []
             for i, order_by_expr in enumerate(logical.order_by_exprs):
-                polars_exprs.append(self._convert_expr(order_by_expr.expr).alias(SORT_KEY_COLUMN_NAME + f"_{i}"))
+                polars_exprs.append(
+                    self._convert_expr(order_by_expr.expr).alias(
+                        SORT_KEY_COLUMN_NAME + f"_{i}"
+                    )
+                )
                 descending.append(not order_by_expr.ascending)
                 nulls_last.append(order_by_expr.nulls_last)
             struct = pl.struct(polars_exprs)
@@ -435,6 +442,7 @@ class ExprConverter:
                     descending=descending,
                     nulls_last=nulls_last,
                 ).execute()
+
             return struct.map_batches(
                 sem_reduce_fn, return_dtype=pl.Utf8, agg_list=True, returns_scalar=True
             )
@@ -453,15 +461,10 @@ class ExprConverter:
         any_null = pl.any_horizontal([expr.is_null() for expr in converted_inputs])
         return struct_expr.filter(~any_null).n_unique()
 
-
     @_convert_expr.register(UDFExpr)
     def _convert_udf_expr(self, logical: UDFExpr) -> pl.Expr:
-        struct = pl.struct(
-            [self._convert_expr(arg) for arg in logical.args]
-        )
-        converted_udf = _convert_udf_to_map_elements(
-            logical.func
-        )
+        struct = pl.struct([self._convert_expr(arg) for arg in logical.args])
+        converted_udf = _convert_udf_to_map_elements(logical.func)
         return struct.map_elements(
             converted_udf,
             return_dtype=convert_custom_dtype_to_polars(logical.return_type),
@@ -484,7 +487,7 @@ class ExprConverter:
                     loop=loop,
                     max_concurrency=logical.max_concurrency,
                     timeout=logical.timeout_seconds,
-                    num_retries=logical.num_retries
+                    num_retries=logical.num_retries,
                 )
 
                 def results_generator():
@@ -496,26 +499,27 @@ class ExprConverter:
                             if result:
                                 inferred_type = infer_dtype_from_pyobj(result)
                                 if inferred_type != logical.return_type:
-                                    raise TypeError(f"Expected {logical.return_type}, got {inferred_type} in async UDF")
+                                    raise TypeError(
+                                        f"Expected {logical.return_type}, got {inferred_type} in async UDF"
+                                    )
                             yield result
 
-                return pl.Series(results_generator(), dtype=convert_custom_dtype_to_polars(logical.return_type))
+                return pl.Series(
+                    results_generator(),
+                    dtype=convert_custom_dtype_to_polars(logical.return_type),
+                )
 
         return input_struct.map_batches(execute_async_udf)
 
     @_convert_expr.register(StructExpr)
     def _convert_struct_expr(self, logical: StructExpr) -> pl.Expr:
-        return pl.struct(
-            [self._convert_expr(child) for child in logical.children()]
-        )
-
+        return pl.struct([self._convert_expr(child) for child in logical.children()])
 
     @_convert_expr.register(ArrayExpr)
     def _convert_array_expr(self, logical: ArrayExpr) -> pl.Expr:
         return pl.concat_list(
             [self._convert_expr(child) for child in logical.children()]
         )
-
 
     @_convert_expr.register(IndexExpr)
     def _convert_index_expr(self, logical: IndexExpr) -> pl.Expr:
@@ -528,12 +532,10 @@ class ExprConverter:
         else:
             raise InternalError(f"Unsupported index key type: {logical.input_type}")
 
-
     @_convert_expr.register(TsParseExpr)
     def _convert_ts_parse_expr(self, logical: TsParseExpr) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
         return physical_expr.transcript.parse(logical.format)
-
 
     @_convert_expr.register(TextractExpr)
     def _convert_textract_expr(self, logical: TextractExpr) -> pl.Expr:
@@ -549,7 +551,8 @@ class ExprConverter:
                 col: None for col in logical.parsed_template.columns
             }
             return {
-                col: result_dict.get(col, None) for col in logical.parsed_template.columns
+                col: result_dict.get(col, None)
+                for col in logical.parsed_template.columns
             }
 
         return_struct_type = logical.parsed_template.to_struct_schema()
@@ -597,12 +600,11 @@ class ExprConverter:
         if logical.response_format:
             return jinja_expr.map_batches(
                 sem_map_fn,
-                return_dtype=convert_custom_dtype_to_polars(logical.response_format.struct_type),
+                return_dtype=convert_custom_dtype_to_polars(
+                    logical.response_format.struct_type
+                ),
             )
-        return jinja_expr.map_batches(
-            sem_map_fn,
-            return_dtype=pl.String
-        )
+        return jinja_expr.map_batches(sem_map_fn, return_dtype=pl.String)
 
     @_convert_expr.register(RecursiveTextChunkExpr)
     def _convert_text_chunk_expr(self, logical: RecursiveTextChunkExpr) -> pl.Expr:
@@ -610,12 +612,10 @@ class ExprConverter:
         kwargs = dict(logical.chunking_configuration)
         return text_col.chunking.recursive(**kwargs)
 
-
     @_convert_expr.register(CountTokensExpr)
     def _count_tokens(self, logical: CountTokensExpr) -> pl.Expr:
         text_col = self._convert_expr(logical.input_expr)
         return text_col.tokenization.count_tokens()
-
 
     @_convert_expr.register(TextChunkExpr)
     def _convert_token_chunk_expr(self, logical: TextChunkExpr) -> pl.Expr:
@@ -645,7 +645,8 @@ class ExprConverter:
             words = val.split()
             step = config.desired_chunk_size - chunk_overlap
             chunks = [
-                words[i : i + config.desired_chunk_size] for i in range(0, len(words), step)
+                words[i : i + config.desired_chunk_size]
+                for i in range(0, len(words), step)
             ]
             return [" ".join(chunk) for chunk in chunks]
 
@@ -666,13 +667,12 @@ class ExprConverter:
             ChunkLengthFunction.CHARACTER: character_chunk_udf,
         }
 
-        output_dtype = convert_custom_dtype_to_polars(ArrayType(element_type=StringType))
-        return self._convert_expr(
-            logical.input_expr
-        ).map_elements(
+        output_dtype = convert_custom_dtype_to_polars(
+            ArrayType(element_type=StringType)
+        )
+        return self._convert_expr(logical.input_expr).map_elements(
             chunk_udfs[config.chunk_length_function_name], return_dtype=output_dtype
         )
-
 
     @_convert_expr.register(SemanticExtractExpr)
     def _convert_semantic_extract_expr(self, logical: SemanticExtractExpr) -> pl.Expr:
@@ -692,7 +692,6 @@ class ExprConverter:
                 logical.response_format.struct_type
             ),
         )
-
 
     @_convert_expr.register(SemanticPredExpr)
     def _convert_semantic_pred_expr(self, logical: SemanticPredExpr) -> pl.Expr:
@@ -715,7 +714,6 @@ class ExprConverter:
 
         return jinja_expr.map_batches(sem_pred_fn, return_dtype=pl.Boolean)
 
-
     @_convert_expr.register(SemanticClassifyExpr)
     def _convert_semantic_classify_expr(self, logical: SemanticClassifyExpr) -> pl.Expr:
         def sem_classify_fn(batch: pl.Series) -> pl.Series:
@@ -732,9 +730,10 @@ class ExprConverter:
             sem_classify_fn, return_dtype=pl.Utf8
         )
 
-
     @_convert_expr.register(AnalyzeSentimentExpr)
-    def _convert_semantic_analyze_sentiment_expr(self, logical: AnalyzeSentimentExpr) -> pl.Expr:
+    def _convert_semantic_analyze_sentiment_expr(
+        self, logical: AnalyzeSentimentExpr
+    ) -> pl.Expr:
         def sem_sentiment_fn(batch: pl.Series) -> pl.Series:
             return AnalyzeSentiment(
                 input=batch,
@@ -748,8 +747,8 @@ class ExprConverter:
         )
 
     @_convert_expr.register(SemanticSummarizeExpr)
-    def _convert_semantic_summarize_expr(self,
-        logical: SemanticSummarizeExpr
+    def _convert_semantic_summarize_expr(
+        self, logical: SemanticSummarizeExpr
     ) -> pl.Expr:
         def sem_summarize_fn(batch: pl.Series) -> pl.Series:
             return SemanticSummarize(
@@ -757,7 +756,6 @@ class ExprConverter:
                 format=logical.format,
                 temperature=logical.temperature,
                 model=self.session_state.get_language_model(logical.model_alias),
-
             ).execute()
 
         return self._convert_expr(logical.expr).map_batches(
@@ -782,17 +780,13 @@ class ExprConverter:
 
     @_convert_expr.register(ArrayJoinExpr)
     def _convert_array_join_expr(self, logical: ArrayJoinExpr) -> pl.Expr:
-        return self._convert_expr(logical.expr).list.join(
-            logical.delimiter
-        )
-
+        return self._convert_expr(logical.expr).list.join(logical.delimiter)
 
     @_convert_expr.register(ContainsExpr)
     def _convert_contains_expr(self, logical: ContainsExpr) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
         substr_expr = self._convert_expr(logical.substr)
         return physical_expr.str.contains(pattern=substr_expr, literal=True)
-
 
     @_convert_expr.register(ContainsAnyExpr)
     def _convert_contains_any_expr(self, logical: ContainsAnyExpr) -> pl.Expr:
@@ -801,7 +795,6 @@ class ExprConverter:
             patterns=logical.substrs, ascii_case_insensitive=logical.case_insensitive
         )
 
-
     # Group like/regex expressions together
     def _handle_regex_like_expr(self, logical) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
@@ -809,7 +802,10 @@ class ExprConverter:
         case_insensitive = True if isinstance(logical, ILikeExpr) else False
 
         strict = False
-        if isinstance(logical.pattern, LiteralExpr) and logical.pattern.data_type == StringType:
+        if (
+            isinstance(logical.pattern, LiteralExpr)
+            and logical.pattern.data_type == StringType
+        ):
             # If the pattern is a "string" literal, then make sure that strict is True.
             strict = True
 
@@ -825,13 +821,11 @@ class ExprConverter:
     def _convert_like_expr(self, logical) -> pl.Expr:
         return self._handle_regex_like_expr(logical)
 
-
     @_convert_expr.register(StartsWithExpr)
     def _convert_starts_with_expr(self, logical: StartsWithExpr) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
         substr_expr = self._convert_expr(logical.substr)
         return physical_expr.str.starts_with(prefix=substr_expr)
-
 
     @_convert_expr.register(EndsWithExpr)
     def _convert_ends_with_expr(self, logical: EndsWithExpr) -> pl.Expr:
@@ -839,19 +833,24 @@ class ExprConverter:
         substr_expr = self._convert_expr(logical.substr)
         return physical_expr.str.ends_with(suffix=substr_expr)
 
-
     @_convert_expr.register(EmbeddingsExpr)
     def _convert_embeddings_expr(self, logical: EmbeddingsExpr) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
         if logical.dimensions is None:
-            raise InternalError("Embedding dimensions not set for embeddings expression")
+            raise InternalError(
+                "Embedding dimensions not set for embeddings expression"
+            )
 
         embedding_model = self.session_state.get_embedding_model(logical.model_alias)
+
         def embeddings_fn(batch: pl.Series) -> pl.Series:
-            return pl.from_arrow(embedding_model.get_embeddings(batch, logical.model_alias))
+            return pl.from_arrow(
+                embedding_model.get_embeddings(batch, logical.model_alias)
+            )
 
-        return physical_expr.map_batches(embeddings_fn, return_dtype=pl.Array(pl.Float32, logical.dimensions))
-
+        return physical_expr.map_batches(
+            embeddings_fn, return_dtype=pl.Array(pl.Float32, logical.dimensions)
+        )
 
     @_convert_expr.register(SplitPartExpr)
     def _convert_split_part_expr(self, logical: SplitPartExpr) -> pl.Expr:
@@ -869,11 +868,7 @@ class ExprConverter:
         )
 
         # Get the part and handle out of range with empty string
-        return (
-            split_expr.list.get(part_expr, null_on_oob=True)
-            .fill_null("")
-        )
-
+        return split_expr.list.get(part_expr, null_on_oob=True).fill_null("")
 
     @_convert_expr.register(ArrayContainsExpr)
     def _convert_array_contains_expr(self, logical: ArrayContainsExpr) -> pl.Expr:
@@ -881,7 +876,6 @@ class ExprConverter:
         element_expr = self._convert_expr(logical.other)
 
         return array_expr.list.contains(element_expr)
-
 
     @_convert_expr.register(RegexpSplitExpr)
     def _convert_regexp_split_expr(self, logical: RegexpSplitExpr) -> pl.Expr:
@@ -901,7 +895,6 @@ class ExprConverter:
             )
             return split_ready.str.split(by=delimiter)
 
-
     @_convert_expr.register(RegexpCountExpr)
     def _convert_regexp_count_expr(self, logical: RegexpCountExpr) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
@@ -909,7 +902,6 @@ class ExprConverter:
 
         # str.count_matches accepts expressions directly
         return physical_expr.str.count_matches(pattern_expr, literal=False)
-
 
     @_convert_expr.register(RegexpExtractExpr)
     def _convert_regexp_extract_expr(self, logical: RegexpExtractExpr) -> pl.Expr:
@@ -919,14 +911,17 @@ class ExprConverter:
         # str.extract accepts pattern as expr, but group_index must be int
         return physical_expr.str.extract(pattern_expr, logical.idx).fill_null("")
 
-
     @_convert_expr.register(RegexpExtractAllExpr)
-    def _convert_regexp_extract_all_expr(self, logical: RegexpExtractAllExpr) -> pl.Expr:
+    def _convert_regexp_extract_all_expr(
+        self, logical: RegexpExtractAllExpr
+    ) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
         pattern_expr = self._convert_expr(logical.pattern)
 
         # For PySpark compatibility: extract all matches of a specific group
-        if isinstance(logical.idx, LiteralExpr) and isinstance(logical.pattern, LiteralExpr):
+        if isinstance(logical.idx, LiteralExpr) and isinstance(
+            logical.pattern, LiteralExpr
+        ):
             group_idx = int(logical.idx.literal)
             pattern = logical.pattern.literal
 
@@ -938,7 +933,6 @@ class ExprConverter:
         idx_expr = self._convert_expr(logical.idx)
         return physical_expr.regexp.extract_all(pattern_expr, idx_expr)
 
-
     @_convert_expr.register(RegexpInstrExpr)
     def _convert_regexp_instr_expr(self, logical: RegexpInstrExpr) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
@@ -947,19 +941,24 @@ class ExprConverter:
         # If idx is a literal, use native Polars operations (faster)
         if isinstance(logical.idx, LiteralExpr):
             # Extract the match at the specified group index
-            match_expr = physical_expr.str.extract(pattern_expr, int(logical.idx.literal))
+            match_expr = physical_expr.str.extract(
+                pattern_expr, int(logical.idx.literal)
+            )
             # Find position: use str.find on the match within the original string
             # Add 1 to convert from 0-based to 1-based indexing (PySpark compatibility)
             # Return 0 if no match, null if input is null
-            return pl.when(physical_expr.is_null()).then(None).otherwise(
-                pl.when(match_expr.is_null()).then(pl.lit(0)).otherwise(
-                    physical_expr.str.find(match_expr, literal=True) + 1
+            return (
+                pl.when(physical_expr.is_null())
+                .then(None)
+                .otherwise(
+                    pl.when(match_expr.is_null())
+                    .then(pl.lit(0))
+                    .otherwise(physical_expr.str.find(match_expr, literal=True) + 1)
                 )
             )
 
         idx_expr = self._convert_expr(logical.idx)
         return physical_expr.regexp.instr(pattern_expr, idx_expr)
-
 
     @_convert_expr.register(RegexpSubstrExpr)
     def _convert_regexp_substr_expr(self, logical: RegexpSubstrExpr) -> pl.Expr:
@@ -968,7 +967,6 @@ class ExprConverter:
 
         # str.extract accepts pattern as expr, extract group 0 (entire match)
         return physical_expr.str.extract(pattern_expr, 0)
-
 
     @_convert_expr.register(StripCharsExpr)
     def _convert_strip_chars_expr(self, logical: StripCharsExpr) -> pl.Expr:
@@ -986,7 +984,6 @@ class ExprConverter:
         else:
             raise NotImplementedError(f"Unsupported side: {logical.side}")
 
-
     @_convert_expr.register(StringCasingExpr)
     def _convert_string_casing_expr(self, logical: StringCasingExpr) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
@@ -1001,7 +998,6 @@ class ExprConverter:
             return case_methods[logical.case]()
         else:
             raise NotImplementedError(f"Unsupported case: {logical.case}")
-
 
     @_convert_expr.register(ReplaceExpr)
     def _convert_replace_expr(self, logical: ReplaceExpr) -> pl.Expr:
@@ -1030,33 +1026,23 @@ class ExprConverter:
         physical_expr = self._convert_expr(logical.expr)
         return physical_expr.str.len_chars()
 
-
     @_convert_expr.register(ByteLengthExpr)
     def _convert_byte_length_expr(self, logical: ByteLengthExpr) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
         return physical_expr.str.len_bytes()
 
-
     @_convert_expr.register(ConcatExpr)
     def _convert_concat_expr(self, logical: ConcatExpr) -> pl.Expr:
         return pl.concat_str(
-            [
-                self._convert_expr(expr)
-                for expr in logical.exprs
-            ],
+            [self._convert_expr(expr) for expr in logical.exprs],
             separator="",
         )
-
 
     @_convert_expr.register(CoalesceExpr)
     def _convert_coalesce_expr(self, logical: CoalesceExpr) -> pl.Expr:
         return pl.coalesce(
-            [
-                self._convert_expr(expr)
-                for expr in logical.exprs
-            ],
+            [self._convert_expr(expr) for expr in logical.exprs],
         )
-
 
     @_convert_expr.register(IsNullExpr)
     def _convert_is_null_expr(self, logical: IsNullExpr) -> pl.Expr:
@@ -1065,11 +1051,9 @@ class ExprConverter:
         else:
             return self._convert_expr(logical.expr).is_not_null()
 
-
     @_convert_expr.register(ArrayLengthExpr)
     def _convert_array_length_expr(self, logical: ArrayLengthExpr) -> pl.Expr:
         return self._convert_expr(logical.expr).list.len()
-
 
     @_convert_expr.register(ArrayDistinctExpr)
     def _convert_array_distinct_expr(self, logical: ArrayDistinctExpr) -> pl.Expr:
@@ -1097,7 +1081,9 @@ class ExprConverter:
         element_expr = self._convert_expr(logical.element)
         # Filter out elements that match the target element
         # Need to handle the case where element_expr might be a column reference
-        return array_expr.list.eval(pl.element().filter(pl.element() != element_expr.first()))
+        return array_expr.list.eval(
+            pl.element().filter(pl.element() != element_expr.first())
+        )
 
     @_convert_expr.register(ArrayUnionExpr)
     def _convert_array_union_expr(self, logical: ArrayUnionExpr) -> pl.Expr:
@@ -1135,14 +1121,17 @@ class ExprConverter:
             elem_series = s.struct.field("_elem")
             count_series = s.struct.field("_count")
 
-            return pl.Series([
-                [elem] * count if count is not None else None
-                for elem, count in zip(elem_series, count_series, strict=True)
-            ], dtype=pl.List(elem_series.dtype))
+            return pl.Series(
+                [
+                    [elem] * count if count is not None else None
+                    for elem, count in zip(elem_series, count_series, strict=True)
+                ],
+                dtype=pl.List(elem_series.dtype),
+            )
 
-        return pl.struct([element_expr.alias("_elem"), count_expr.alias("_count")]).map_batches(
-            _repeat_elements
-        )
+        return pl.struct(
+            [element_expr.alias("_elem"), count_expr.alias("_count")]
+        ).map_batches(_repeat_elements)
 
     @_convert_expr.register(FlattenExpr)
     def _convert_flatten_expr(self, logical: FlattenExpr) -> pl.Expr:
@@ -1158,7 +1147,9 @@ class ExprConverter:
         # PySpark slice uses 1-based indexing for start position
         # Positive indices: convert 1-based to 0-based (subtract 1)
         # Negative indices: keep as-is (both PySpark and Polars use -1 for last element)
-        adjusted_start = pl.when(start_expr > 0).then(start_expr - 1).otherwise(start_expr)
+        adjusted_start = (
+            pl.when(start_expr > 0).then(start_expr - 1).otherwise(start_expr)
+        )
         return array_expr.list.slice(adjusted_start, length_expr)
 
     @_convert_expr.register(ElementAtExpr)
@@ -1168,7 +1159,9 @@ class ExprConverter:
         # PySpark element_at uses 1-based indexing:
         #   - Positive: 1 is first element (convert to 0-based by subtracting 1)
         #   - Negative: -1 is last element (same in Polars, no conversion needed)
-        adjusted_index = pl.when(index_expr > 0).then(index_expr - 1).otherwise(index_expr)
+        adjusted_index = (
+            pl.when(index_expr > 0).then(index_expr - 1).otherwise(index_expr)
+        )
         return array_expr.list.get(adjusted_index)
 
     @_convert_expr.register(ArraysOverlapExpr)
@@ -1180,21 +1173,17 @@ class ExprConverter:
         intersection = left_expr.list.set_intersection(right_expr)
         return intersection.list.len() > 0
 
-
     @_convert_expr.register(CastExpr)
     def _convert_cast_expr(self, logical: CastExpr) -> pl.Expr:
         if not logical.source_type:
             raise InternalError("Source type not set for cast expression")
         source_dtype = json.dumps(serialize_data_type(logical.source_type))
         dest_dtype = json.dumps(serialize_data_type(logical.dest_type))
-        return self._convert_expr(logical.expr).dtypes.cast(
-            source_dtype, dest_dtype
-        )
+        return self._convert_expr(logical.expr).dtypes.cast(source_dtype, dest_dtype)
 
     @_convert_expr.register(NotExpr)
     def _convert_not_expr(self, logical: NotExpr) -> pl.Expr:
         return self._convert_expr(logical.expr).not_()
-
 
     @_convert_expr.register(WhenExpr)
     def _convert_when_expr(self, logical: WhenExpr) -> pl.Expr:
@@ -1203,33 +1192,23 @@ class ExprConverter:
             return (
                 self._convert_when_expr(logical.expr)
                 .when(self._convert_expr(logical.condition))
-                .then(
-                    self._convert_expr(logical.value).alias(
-                        str(logical)
-                    )
-                )
+                .then(self._convert_expr(logical.value).alias(str(logical)))
             )
         else:
             # head of condition chain
-            return pl.when(
-                self._convert_expr(logical.condition)
-            ).then(self._convert_expr(logical.value))
-
+            return pl.when(self._convert_expr(logical.condition)).then(
+                self._convert_expr(logical.value)
+            )
 
     @_convert_expr.register(OtherwiseExpr)
     def _convert_otherwise_expr(self, logical: OtherwiseExpr) -> pl.Expr:
         return self._convert_when_expr(logical.expr).otherwise(
-            self._convert_expr(logical.value).alias(
-                str(logical)
-            )
+            self._convert_expr(logical.value).alias(str(logical))
         )
-
 
     @_convert_expr.register(InExpr)
     def _convert_in_expr(self, logical: InExpr) -> pl.Expr:
-        return self._convert_expr(logical.expr).is_in(
-            self._convert_expr(logical.other)
-        )
+        return self._convert_expr(logical.expr).is_in(self._convert_expr(logical.other))
 
     @_convert_expr.register(JqExpr)
     def _convert_jq_expr(self, logical: JqExpr) -> pl.Expr:
@@ -1249,7 +1228,6 @@ class ExprConverter:
             .dtypes.cast(source_dtype, dest_dtype)
             .struct.field("result")
         )
-
 
     @_convert_expr.register(JsonContainsExpr)
     def _convert_json_contains_expr(self, logical: JsonContainsExpr) -> pl.Expr:
@@ -1275,11 +1253,13 @@ class ExprConverter:
         source_dtype = json.dumps(serialize_data_type(JsonType))
         dest_dtype = json.dumps(
             serialize_data_type(
-                ArrayType(element_type=
-                    StructType([
-                        StructField("language", StringType),
-                        StructField("code", StringType),
-                    ])
+                ArrayType(
+                    element_type=StructType(
+                        [
+                            StructField("language", StringType),
+                            StructField("code", StringType),
+                        ]
+                    )
                 )
             )
         )
@@ -1309,20 +1289,23 @@ class ExprConverter:
             .struct.field("toc")
         )
 
-
     @_convert_expr.register(MdExtractHeaderChunks)
-    def _convert_md_chunk_by_headings_expr(self, logical: MdExtractHeaderChunks) -> pl.Expr:
+    def _convert_md_chunk_by_headings_expr(
+        self, logical: MdExtractHeaderChunks
+    ) -> pl.Expr:
         source_dtype = json.dumps(serialize_data_type(JsonType))
         dest_dtype = json.dumps(
             serialize_data_type(
-                ArrayType(element_type=
-                    StructType([
-                        StructField("heading", StringType),
-                        StructField("level", IntegerType),
-                        StructField("content", StringType),
-                        StructField("parent_heading", StringType),
-                        StructField("full_path", StringType),
-                    ])
+                ArrayType(
+                    element_type=StructType(
+                        [
+                            StructField("heading", StringType),
+                            StructField("level", IntegerType),
+                            StructField("content", StringType),
+                            StructField("parent_heading", StringType),
+                            StructField("full_path", StringType),
+                        ]
+                    )
                 )
             )
         )
@@ -1339,15 +1322,17 @@ class ExprConverter:
 
     @_convert_expr.register(RemoveStopwordsExpr)
     def _convert_remove_stopwords_expr(self, logical: RemoveStopwordsExpr) -> pl.Expr:
-        physical_expr = self._convert_expr(logical.expr)
+        """Convert unified RemoveStopwordsExpr to Polars expression."""
+        column_expr = self._convert_expr(logical.column)
         language_expr = self._convert_expr(logical.language)
-        return physical_expr.nlp.remove_stopwords(language_expr)
 
-    @_convert_expr.register(RemoveCustomStopwordsExpr)
-    def _convert_remove_custom_stopwords_expr(self, logical: RemoveCustomStopwordsExpr) -> pl.Expr:
-        physical_expr = self._convert_expr(logical.expr)
-        stopwords_expr = self._convert_expr(logical.stopwords)
-        return physical_expr.nlp.remove_custom_stopwords(stopwords_expr)
+        if logical.custom_stopwords is not None:
+            custom_stopwords_expr = self._convert_expr(logical.custom_stopwords)
+            return column_expr.nlp.remove_stopwords(
+                language_expr, custom_stopwords_expr
+            )
+        else:
+            return column_expr.nlp.remove_stopwords(language_expr)
 
     @_convert_expr.register(DetectLanguageExpr)
     def _convert_detect_language_expr(self, logical: DetectLanguageExpr) -> pl.Expr:
@@ -1355,13 +1340,16 @@ class ExprConverter:
         return physical_expr.nlp.detect_language()
 
     @_convert_expr.register(DetectLanguageWithConfidenceExpr)
-    def _convert_detect_language_with_confidence_expr(self, logical: DetectLanguageWithConfidenceExpr) -> pl.Expr:
+    def _convert_detect_language_with_confidence_expr(
+        self, logical: DetectLanguageWithConfidenceExpr
+    ) -> pl.Expr:
         physical_expr = self._convert_expr(logical.expr)
         return physical_expr.nlp.detect_language_with_confidence()
 
-
     @_convert_expr.register(EmbeddingNormalizeExpr)
-    def _convert_embedding_normalize_expr(self, logical: EmbeddingNormalizeExpr) -> pl.Expr:
+    def _convert_embedding_normalize_expr(
+        self, logical: EmbeddingNormalizeExpr
+    ) -> pl.Expr:
         if logical.dimensions is None:
             raise InternalError("EmbeddingNormalizeExpr dimensions not set")
 
@@ -1375,7 +1363,7 @@ class ExprConverter:
             norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
             normalized = np.divide(embeddings, norms, where=norms != 0)
             # Zero vectors become NaN after normalization - expand condition to match dimensions
-            zero_mask = (norms == 0)  # shape (N, 1)
+            zero_mask = norms == 0  # shape (N, 1)
             normalized = np.where(zero_mask, np.nan, normalized)
 
             # Fast path: no nulls in input
@@ -1391,15 +1379,18 @@ class ExprConverter:
                 else:
                     nested_values.append(None)
 
-            return pl.from_arrow(pa.array(nested_values, type=pa.list_(pa.float32(), logical.dimensions)))
+            return pl.from_arrow(
+                pa.array(nested_values, type=pa.list_(pa.float32(), logical.dimensions))
+            )
 
         return self._convert_expr(logical.expr).map_batches(
             normalize_fn, return_dtype=pl.Array(pl.Float32, logical.dimensions)
         )
 
-
     @_convert_expr.register(EmbeddingSimilarityExpr)
-    def _convert_embedding_similarity_expr(self, logical: EmbeddingSimilarityExpr) -> pl.Expr:
+    def _convert_embedding_similarity_expr(
+        self, logical: EmbeddingSimilarityExpr
+    ) -> pl.Expr:
         if isinstance(logical.other, LogicalExpr):
             # Case 1: Column vs Column similarity
             def pairwise_similarity_fn(batch: pl.Series) -> pl.Series:
@@ -1438,7 +1429,7 @@ class ExprConverter:
             )
         else:
             # Case 2: Column vs single query vector similarity
-            query_vector = logical.other # This is already a numpy array
+            query_vector = logical.other  # This is already a numpy array
 
             def similarity_fn(batch: pl.Series) -> pl.Series:
                 mask = ~batch.is_null().to_numpy()
@@ -1470,20 +1461,28 @@ class ExprConverter:
         left_expr = self._convert_expr(logical.expr)
         right_expr = self._convert_expr(logical.other)
 
-        return _convert_fuzzy_similarity_method_to_expr(left_expr, right_expr, logical.method)
+        return _convert_fuzzy_similarity_method_to_expr(
+            left_expr, right_expr, logical.method
+        )
 
     @_convert_expr.register(FuzzyTokenSortRatioExpr)
-    def _convert_fuzzy_token_sort_ratio_expr(self, logical: FuzzyTokenSortRatioExpr) -> pl.Expr:
+    def _convert_fuzzy_token_sort_ratio_expr(
+        self, logical: FuzzyTokenSortRatioExpr
+    ) -> pl.Expr:
         left_tokens = _tokenize_for_fuzzy_similarity(self._convert_expr(logical.expr))
         right_tokens = _tokenize_for_fuzzy_similarity(self._convert_expr(logical.other))
 
         left_expr = left_tokens.list.sort().list.join(" ")
         right_expr = right_tokens.list.sort().list.join(" ")
 
-        return _convert_fuzzy_similarity_method_to_expr(left_expr, right_expr, logical.method)
+        return _convert_fuzzy_similarity_method_to_expr(
+            left_expr, right_expr, logical.method
+        )
 
     @_convert_expr.register(FuzzyTokenSetRatioExpr)
-    def _convert_fuzzy_token_set_ratio_expr(self, logical: FuzzyTokenSetRatioExpr) -> pl.Expr:
+    def _convert_fuzzy_token_set_ratio_expr(
+        self, logical: FuzzyTokenSetRatioExpr
+    ) -> pl.Expr:
         # Tokenize and normalize
         left_tokens = _tokenize_for_fuzzy_similarity(self._convert_expr(logical.expr))
         right_tokens = _tokenize_for_fuzzy_similarity(self._convert_expr(logical.other))
@@ -1508,9 +1507,15 @@ class ExprConverter:
         # 1. diff_left vs diff_right
         # 2. intersection vs left_set (intersection + diff_left)
         # 3. intersection vs right_set (intersection + diff_right)
-        ratio1 = _convert_fuzzy_similarity_method_to_expr(diff_left_str, diff_right_str, logical.method)
-        ratio2 = _convert_fuzzy_similarity_method_to_expr(intersection_str, left_set_str, logical.method)
-        ratio3 = _convert_fuzzy_similarity_method_to_expr(intersection_str, right_set_str, logical.method)
+        ratio1 = _convert_fuzzy_similarity_method_to_expr(
+            diff_left_str, diff_right_str, logical.method
+        )
+        ratio2 = _convert_fuzzy_similarity_method_to_expr(
+            intersection_str, left_set_str, logical.method
+        )
+        ratio3 = _convert_fuzzy_similarity_method_to_expr(
+            intersection_str, right_set_str, logical.method
+        )
 
         # Return the maximum
         return pl.max_horizontal([ratio1, ratio2, ratio3])
@@ -1567,13 +1572,17 @@ class ExprConverter:
     def _convert_to_date_expr(self, logical: ToDateExpr) -> pl.Expr:
         """Convert a string into a date."""
         # logical.format should be a chrono format.
-        return self._convert_expr(logical.expr).str.strptime(dtype=pl.Date, format=logical.format)
+        return self._convert_expr(logical.expr).str.strptime(
+            dtype=pl.Date, format=logical.format
+        )
 
     @_convert_expr.register(ToTimestampExpr)
     def _convert_to_timestamp_expr(self, logical: ToTimestampExpr) -> pl.Expr:
         """Convert a string into a timestamp."""
         # logical.format should be a chrono format.
-        result = self._convert_expr(logical.expr).str.strptime(dtype=pl.Datetime, format=logical.format)
+        result = self._convert_expr(logical.expr).str.strptime(
+            dtype=pl.Datetime, format=logical.format
+        )
         if _format_has_tz_tokens(logical.format):
             return result.dt.convert_time_zone("UTC")
         else:
@@ -1582,7 +1591,10 @@ class ExprConverter:
     @_convert_expr.register(NowExpr)
     def _convert_now_expr(self, logical: NowExpr) -> pl.Expr:
         """Convert a string into a timestamp."""
-        return pl.lit(datetime.datetime.now(tz=datetime.timezone.utc), dtype=pl.Date if logical.as_date else pl.Datetime)
+        return pl.lit(
+            datetime.datetime.now(tz=datetime.timezone.utc),
+            dtype=pl.Date if logical.as_date else pl.Datetime,
+        )
 
     @_convert_expr.register(DateTruncExpr)
     def _convert_date_trunc_expr(self, logical: DateTruncExpr) -> pl.Expr:
@@ -1593,13 +1605,19 @@ class ExprConverter:
     def _convert_date_add_expr(self, logical: DateAddExpr) -> pl.Expr:
         if logical.sub:
             # Must substact the days from the date/timestamp column.
-            return self._convert_expr(logical.expr) - pl.duration(days=self._convert_expr(logical.days))
-        return self._convert_expr(logical.expr) + pl.duration(days=self._convert_expr(logical.days))
+            return self._convert_expr(logical.expr) - pl.duration(
+                days=self._convert_expr(logical.days)
+            )
+        return self._convert_expr(logical.expr) + pl.duration(
+            days=self._convert_expr(logical.days)
+        )
 
     @_convert_expr.register(TimestampAddExpr)
     def _convert_timestamp_add_expr(self, logical: TimestampAddExpr) -> pl.Expr:
         quantity_expr = self._convert_expr(logical.quantity)
-        return self._convert_expr(logical.expr).dt.offset_by(pl.format("{}{}", quantity_expr, pl.lit(logical.unit)))
+        return self._convert_expr(logical.expr).dt.offset_by(
+            pl.format("{}{}", quantity_expr, pl.lit(logical.unit))
+        )
 
     @_convert_expr.register(DateFormatExpr)
     def _convert_date_format_expr(self, logical: DateFormatExpr) -> pl.Expr:
@@ -1637,22 +1655,32 @@ class ExprConverter:
         elif logical.unit == "millisecond":
             return duration_expr.dt.total_milliseconds()
         else:
-            raise InternalError(f"Unknown timestamp diff unit: {logical.unit}. Invalid state.")
+            raise InternalError(
+                f"Unknown timestamp diff unit: {logical.unit}. Invalid state."
+            )
 
     @_convert_expr.register(ToUTCTimestampExpr)
     def _convert_to_utc_timestamp_expr(self, logical: ToUTCTimestampExpr) -> pl.Expr:
-        return (self._convert_expr(logical.expr)
+        return (
+            self._convert_expr(logical.expr)
             .dt.replace_time_zone(logical.timezone)
-            .dt.convert_time_zone("UTC"))
+            .dt.convert_time_zone("UTC")
+        )
 
     @_convert_expr.register(FromUTCTimestampExpr)
-    def _convert_from_utc_timestamp_expr(self, logical: FromUTCTimestampExpr) -> pl.Expr:
-        return (self._convert_expr(logical.expr)
+    def _convert_from_utc_timestamp_expr(
+        self, logical: FromUTCTimestampExpr
+    ) -> pl.Expr:
+        return (
+            self._convert_expr(logical.expr)
             .dt.convert_time_zone(logical.timezone)
-            .dt.replace_time_zone("UTC"))
+            .dt.replace_time_zone("UTC")
+        )
 
 
-def _convert_fuzzy_similarity_method_to_expr(expr: pl.Expr, other: pl.Expr, method: FuzzySimilarityMethod) -> pl.Expr:
+def _convert_fuzzy_similarity_method_to_expr(
+    expr: pl.Expr, other: pl.Expr, method: FuzzySimilarityMethod
+) -> pl.Expr:
     if method == "indel":
         return expr.fuzz.normalized_indel_similarity(other)
     if method == "levenshtein":
@@ -1666,10 +1694,14 @@ def _convert_fuzzy_similarity_method_to_expr(expr: pl.Expr, other: pl.Expr, meth
     elif method == "hamming":
         return expr.fuzz.normalized_hamming_similarity(other)
     else:
-        raise InternalError(f"Unknown fuzzy similarity method: {method}. Invalid state.")
+        raise InternalError(
+            f"Unknown fuzzy similarity method: {method}. Invalid state."
+        )
+
 
 def _tokenize_for_fuzzy_similarity(expr: pl.Expr) -> pl.Expr:
     return expr.str.replace_all(r"\s+", " ").str.strip_chars().str.split(" ")
+
 
 def _calculate_similarity_numpy(
     embeddings: np.ndarray, query: np.ndarray, metric: str
@@ -1690,6 +1722,7 @@ def _calculate_similarity_numpy(
 
     raise InternalError(f"Unknown similarity metric: {metric}. Invalid state.")
 
+
 def _convert_udf_to_map_elements(udf: Callable) -> Callable:
     """Converts a scalar-based UDF into one that works with `map_elements` in Polars.
 
@@ -1708,6 +1741,7 @@ def _convert_udf_to_map_elements(udf: Callable) -> Callable:
 
     return adapted_udf
 
+
 def _like_to_regex(pattern_expr: pl.Expr, case_insensitive: bool = False) -> pl.Expr:
     """Convert a LIKE pattern to a regex pattern."""
     # Escape regex metacharacters except SQL wildcards % and _
@@ -1720,22 +1754,25 @@ def _like_to_regex(pattern_expr: pl.Expr, case_insensitive: bool = False) -> pl.
         .str.replace_all(meta_class, r"\\\1")
         # Translate SQL wildcards to regex
         .str.replace_all("%", ".*", literal=True)
-        .str.replace_all("_", ".",  literal=True)
+        .str.replace_all("_", ".", literal=True)
     )
 
     if case_insensitive:
-        return (pl.lit("(?i)") + regex_expr)
+        return pl.lit("(?i)") + regex_expr
 
     return regex_expr
+
 
 def _format_has_tz_tokens(fmt: str) -> bool:
     """Check if a format string has any timezone tokens."""
     tz_tokens = {"V", "z", "O", "X", "Z"}
     return set(fmt) & tz_tokens
 
+
 def _get_zero_ts_part_from_date(expr: pl.Expr) -> pl.Expr:
     """Get the zero part of a date expression."""
-    return (expr.dt.year() * pl.lit(0, dtype=pl.Int32))
+    return expr.dt.year() * pl.lit(0, dtype=pl.Int32)
+
 
 def _pytype_datetime_to_utc(dt: datetime.datetime) -> datetime.datetime:
     if dt.tzinfo is None:

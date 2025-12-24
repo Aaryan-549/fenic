@@ -84,14 +84,16 @@ def extract(column: ColumnOrName, template: str) -> Column:
 
     Example: Mixed format extraction
         ```python
-        text.extract(col("data"), 'Name: ${name:csv}, Price: ${price}, Tags: ${tags:json}')
+        text.extract(
+            col("data"), "Name: ${name:csv}, Price: ${price}, Tags: ${tags:json}"
+        )
         # Input: 'Name: "Smith, John", Price: 99.99, Tags: ["a", "b"]'
         # Output: {name: "Smith, John", price: "99.99", tags: ["a", "b"]}
         ```
 
     Example: Quoted field handling
         ```python
-        text.extract(col("record"), 'Title: ${title:quoted}, Author: ${author}')
+        text.extract(col("record"), "Title: ${title:quoted}, Author: ${author}")
         # Input: 'Title: "To Kill a Mockingbird", Author: Harper Lee'
         # Output: {title: "To Kill a Mockingbird", author: "Harper Lee"}
         ```
@@ -102,6 +104,7 @@ def extract(column: ColumnOrName, template: str) -> Column:
     return Column._from_logical_expr(
         TextractExpr(Column._from_col_or_name(column)._logical_expr, template)
     )
+
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
 def recursive_character_chunk(
@@ -128,9 +131,7 @@ def recursive_character_chunk(
     Example: Default character chunking
         ```python
         # Create chunks of at most 100 characters with 20% overlap
-        df.select(
-            text.recursive_character_chunk(col("text"), 100, 20).alias("chunks")
-        )
+        df.select(text.recursive_character_chunk(col("text"), 100, 20).alias("chunks"))
         ```
 
     Example: Custom character chunking
@@ -138,10 +139,7 @@ def recursive_character_chunk(
         # Create chunks with custom split characters
         df.select(
             text.recursive_character_chunk(
-                col("text"),
-                100,
-                20,
-                ['\n\n', '\n', '.', ' ', '']
+                col("text"), 100, 20, ["\n\n", "\n", ".", " ", ""]
             ).alias("chunks")
         )
         ```
@@ -160,7 +158,7 @@ def recursive_character_chunk(
                 chunk_length_function_name=ChunkLengthFunction.CHARACTER,
                 chunking_character_set_name=chunking_character_set_name,
                 chunking_character_set_custom_characters=chunking_character_set_custom_characters,
-            )
+            ),
         )
     )
 
@@ -190,9 +188,7 @@ def recursive_word_chunk(
     Example: Default word chunking
         ```python
         # Create chunks of at most 100 words with 20% overlap
-        df.select(
-            text.recursive_word_chunk(col("text"), 100, 20).alias("chunks")
-        )
+        df.select(text.recursive_word_chunk(col("text"), 100, 20).alias("chunks"))
         ```
 
     Example: Custom word chunking
@@ -200,10 +196,7 @@ def recursive_word_chunk(
         # Create chunks with custom split characters
         df.select(
             text.recursive_word_chunk(
-                col("text"),
-                100,
-                20,
-                ['\n\n', '\n', '.', ' ', '']
+                col("text"), 100, 20, ["\n\n", "\n", ".", " ", ""]
             ).alias("chunks")
         )
         ```
@@ -222,7 +215,7 @@ def recursive_word_chunk(
                 chunk_length_function_name=ChunkLengthFunction.WORD,
                 chunking_character_set_name=chunking_character_set_name,
                 chunking_character_set_custom_characters=chunking_character_set_custom_characters,
-            )
+            ),
         )
     )
 
@@ -252,9 +245,7 @@ def recursive_token_chunk(
     Example: Default token chunking
         ```python
         # Create chunks of at most 100 tokens with 20% overlap
-        df.select(
-            text.recursive_token_chunk(col("text"), 100, 20).alias("chunks")
-        )
+        df.select(text.recursive_token_chunk(col("text"), 100, 20).alias("chunks"))
         ```
 
     Example: Custom token chunking
@@ -262,10 +253,7 @@ def recursive_token_chunk(
         # Create chunks with custom split characters
         df.select(
             text.recursive_token_chunk(
-                col("text"),
-                100,
-                20,
-                ['\n\n', '\n', '.', ' ', '']
+                col("text"), 100, 20, ["\n\n", "\n", ".", " ", ""]
             ).alias("chunks")
         )
         ```
@@ -284,7 +272,7 @@ def recursive_token_chunk(
                 chunk_length_function_name=ChunkLengthFunction.TOKEN,
                 chunking_character_set_name=chunking_character_set_name,
                 chunking_character_set_custom_characters=chunking_character_set_custom_characters,
-            )
+            ),
         )
     )
 
@@ -319,7 +307,7 @@ def character_chunk(
                 desired_chunk_size=chunk_size,
                 chunk_overlap_percentage=chunk_overlap_percentage,
                 chunk_length_function_name=ChunkLengthFunction.CHARACTER,
-            )
+            ),
         )
     )
 
@@ -354,7 +342,7 @@ def word_chunk(
                 desired_chunk_size=chunk_size,
                 chunk_overlap_percentage=chunk_overlap_percentage,
                 chunk_length_function_name=ChunkLengthFunction.WORD,
-            )
+            ),
         )
     )
 
@@ -389,7 +377,7 @@ def token_chunk(
                 desired_chunk_size=chunk_size,
                 chunk_overlap_percentage=chunk_overlap_percentage,
                 chunk_length_function_name=ChunkLengthFunction.TOKEN,
-            )
+            ),
         )
     )
 
@@ -434,7 +422,9 @@ def concat(*cols: ColumnOrName) -> Column:
         ```
     """
     if not cols:
-        raise ValidationError("No columns were provided. Please specify at least one column to use with the concat method.")
+        raise ValidationError(
+            "No columns were provided. Please specify at least one column to use with the concat method."
+        )
 
     flattened_args = []
     for arg in cols:
@@ -447,7 +437,6 @@ def concat(*cols: ColumnOrName) -> Column:
         Column._from_col_or_name(c)._logical_expr for c in flattened_args
     ]
     return Column._from_logical_expr(ConcatExpr(flattened_exprs))
-
 
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
@@ -504,7 +493,9 @@ def concat_ws(separator: str, *cols: ColumnOrName) -> Column:
         ```
     """
     if not cols:
-        raise ValidationError("No columns were provided. Please specify at least one column to use with the concat_ws method.")
+        raise ValidationError(
+            "No columns were provided. Please specify at least one column to use with the concat_ws method."
+        )
 
     flattened_args = []
     for arg in cols:
@@ -624,7 +615,13 @@ def regexp_replace(
     Example: Complex pattern replacement
         ```python
         # Replace email addresses with [REDACTED]
-        df.select(text.regexp_replace(col("text"), r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", "[REDACTED]"))
+        df.select(
+            text.regexp_replace(
+                col("text"),
+                r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                "[REDACTED]",
+            )
+        )
         ```
     """
     if isinstance(pattern, Column):
@@ -662,9 +659,9 @@ def regexp_count(src: ColumnOrName, pattern: Union[Column, str]) -> Column:
         ```python
         import fenic as fc
 
-        df = fc.Session.local().create_dataframe({
-            "text": ["abc123", "456def789", "no digits"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"text": ["abc123", "456def789", "no digits"]}
+        )
 
         result = df.select(fc.text.regexp_count("text", r"\d"))
         # Output: [3, 6, 0]
@@ -672,9 +669,9 @@ def regexp_count(src: ColumnOrName, pattern: Union[Column, str]) -> Column:
 
     Example: Count words
         ```python
-        df = fc.Session.local().create_dataframe({
-            "text": ["hello world", "one two three"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"text": ["hello world", "one two three"]}
+        )
 
         result = df.select(fc.text.regexp_count("text", r"\w+"))
         # Output: [2, 3]
@@ -690,9 +687,7 @@ def regexp_count(src: ColumnOrName, pattern: Union[Column, str]) -> Column:
 
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
-def regexp_extract(
-    src: ColumnOrName, pattern: Union[Column, str], idx: int
-) -> Column:
+def regexp_extract(src: ColumnOrName, pattern: Union[Column, str], idx: int) -> Column:
     r"""Extract a specific regex group from a string.
 
     Extracts a capture group matched by the regex pattern. Group 0 is the entire match, group 1+ are capture groups.
@@ -712,9 +707,9 @@ def regexp_extract(
         ```python
         import fenic as fc
 
-        df = fc.Session.local().create_dataframe({
-            "email": ["user@domain.com", "admin@example.org"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"email": ["user@domain.com", "admin@example.org"]}
+        )
 
         result = df.select(fc.text.regexp_extract("email", r"([^@]+)@", 1))
         # Output: ["user", "admin"]
@@ -722,9 +717,9 @@ def regexp_extract(
 
     Example: Extract phone area code
         ```python
-        df = fc.Session.local().create_dataframe({
-            "phone": ["(555) 123-4567", "(123) 456-7890"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"phone": ["(555) 123-4567", "(123) 456-7890"]}
+        )
 
         result = df.select(fc.text.regexp_extract("phone", r"\((\d{3})\)", 1))
         # Output: ["555", "123"]
@@ -762,9 +757,9 @@ def regexp_extract_all(
         ```python
         import fenic as fc
 
-        df = fc.Session.local().create_dataframe({
-            "text": ["abc123def456", "no digits", "789"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"text": ["abc123def456", "no digits", "789"]}
+        )
 
         result = df.select(fc.text.regexp_extract_all("text", r"\d+"))
         # Output: [["123", "456"], [], ["789"]]
@@ -772,9 +767,9 @@ def regexp_extract_all(
 
     Example: Extract all hashtags
         ```python
-        df = fc.Session.local().create_dataframe({
-            "post": ["Love #coding and #python", "Just #relaxing"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"post": ["Love #coding and #python", "Just #relaxing"]}
+        )
 
         result = df.select(fc.text.regexp_extract_all("post", r"#(\w+)", 1))
         # Output: [["coding", "python"], ["relaxing"]]
@@ -816,9 +811,9 @@ def regexp_instr(
         ```python
         import fenic as fc
 
-        df = fc.Session.local().create_dataframe({
-            "text": ["abc123", "no digits", "456xyz"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"text": ["abc123", "no digits", "456xyz"]}
+        )
 
         result = df.select(fc.text.regexp_instr("text", r"\d"))
         # Output: [4, 0, 1]  # 1-based positions
@@ -826,9 +821,9 @@ def regexp_instr(
 
     Example: Find position of email
         ```python
-        df = fc.Session.local().create_dataframe({
-            "text": ["Contact: user@domain.com", "No email here"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"text": ["Contact: user@domain.com", "No email here"]}
+        )
 
         result = df.select(fc.text.regexp_instr("text", r"[^@]+@[^@]+"))
         # Output: [10, 0]
@@ -866,9 +861,9 @@ def regexp_substr(src: ColumnOrName, pattern: Union[Column, str]) -> Column:
         ```python
         import fenic as fc
 
-        df = fc.Session.local().create_dataframe({
-            "text": ["Price: $123.45", "No price", "Cost: $67.89"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"text": ["Price: $123.45", "No price", "Cost: $67.89"]}
+        )
 
         result = df.select(fc.text.regexp_substr("text", r"\d+\.\d+"))
         # Output: ["123.45", null, "67.89"]
@@ -876,9 +871,9 @@ def regexp_substr(src: ColumnOrName, pattern: Union[Column, str]) -> Column:
 
     Example: Extract first URL
         ```python
-        df = fc.Session.local().create_dataframe({
-            "text": ["Visit https://example.com for info", "No URL here"]
-        })
+        df = fc.Session.local().create_dataframe(
+            {"text": ["Visit https://example.com for info", "No URL here"]}
+        )
 
         result = df.select(fc.text.regexp_substr("text", r"https?://[^\s]+"))
         # Output: ["https://example.com", null]
@@ -985,7 +980,9 @@ def split_part(
 
     return Column._from_logical_expr(
         SplitPartExpr(
-            Column._from_col_or_name(src)._logical_expr, delimiter_expr, part_number_expr
+            Column._from_col_or_name(src)._logical_expr,
+            delimiter_expr,
+            part_number_expr,
         )
     )
 
@@ -1208,12 +1205,7 @@ def byte_length(column: ColumnOrName) -> Column:
 
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
-def jinja(
-    jinja_template: str,
-    /,
-    strict: bool = True,
-    **columns: Column
-) -> Column:
+def jinja(jinja_template: str, /, strict: bool = True, **columns: Column) -> Column:
     """Render a Jinja template using values from the specified columns.
 
     This function evaluates a Jinja2 template string for each row, using the provided
@@ -1279,14 +1271,16 @@ def jinja(
                 # Direct columns
                 query=col("user_question"),
                 context=col("retrieved_context"),  # Can be null for some rows
-
                 # Column expression for conditional logic
-                style=fc.when(col("query_type") == "technical", "detailed and technical")
-                      .when(col("query_type") == "casual", "conversational")
-                      .otherwise("clear and concise"),
-
+                style=fc.when(
+                    col("query_type") == "technical", "detailed and technical"
+                )
+                .when(col("query_type") == "casual", "conversational")
+                .otherwise("clear and concise"),
                 # Array of examples (struct array)
-                examples=col("few_shot_examples")  # Array of {question, answer} structs
+                examples=col(
+                    "few_shot_examples"
+                ),  # Array of {question, answer} structs
             ).alias("llm_prompt")
         )
         ```
@@ -1301,17 +1295,23 @@ def jinja(
     # Convert keyword arguments to column expressions with proper names
     column_exprs: List[LogicalExpr] = []
     for var_name, column in columns.items():
-        if isinstance(column._logical_expr, ColumnExpr) and column._logical_expr.name == var_name:
+        if (
+            isinstance(column._logical_expr, ColumnExpr)
+            and column._logical_expr.name == var_name
+        ):
             column_exprs.append(column._logical_expr)
         else:
             column_exprs.append(column.alias(var_name)._logical_expr)
 
-    return Column._from_logical_expr(
-        JinjaExpr(column_exprs, jinja_template, strict)
-    )
+    return Column._from_logical_expr(JinjaExpr(column_exprs, jinja_template, strict))
+
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
-def compute_fuzzy_ratio(column: ColumnOrName, other: Union[Column, str], method: FuzzySimilarityMethod = "indel") -> Column:
+def compute_fuzzy_ratio(
+    column: ColumnOrName,
+    other: Union[Column, str],
+    method: FuzzySimilarityMethod = "indel",
+) -> Column:
     """Compute the similarity between two strings using a fuzzy string matching algorithm.
 
     This function computes a fuzzy similarity score between two string columns (or a string column
@@ -1357,10 +1357,19 @@ def compute_fuzzy_ratio(column: ColumnOrName, other: Union[Column, str], method:
     else:
         other_expr = other._logical_expr
 
-    return Column._from_logical_expr(FuzzyRatioExpr(Column._from_col_or_name(column)._logical_expr, other_expr, method))
+    return Column._from_logical_expr(
+        FuzzyRatioExpr(
+            Column._from_col_or_name(column)._logical_expr, other_expr, method
+        )
+    )
+
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
-def compute_fuzzy_token_sort_ratio(column: ColumnOrName, other: Union[Column, str], method: FuzzySimilarityMethod = "indel") -> Column:
+def compute_fuzzy_token_sort_ratio(
+    column: ColumnOrName,
+    other: Union[Column, str],
+    method: FuzzySimilarityMethod = "indel",
+) -> Column:
     """Compute fuzzy similarity after sorting tokens in each string.
 
     Tokenizes strings by whitespace, sorts tokens alphabetically, concatenates
@@ -1390,10 +1399,19 @@ def compute_fuzzy_token_sort_ratio(column: ColumnOrName, other: Union[Column, st
     else:
         other_expr = other._logical_expr
 
-    return Column._from_logical_expr(FuzzyTokenSortRatioExpr(Column._from_col_or_name(column)._logical_expr, other_expr, method))
+    return Column._from_logical_expr(
+        FuzzyTokenSortRatioExpr(
+            Column._from_col_or_name(column)._logical_expr, other_expr, method
+        )
+    )
+
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
-def compute_fuzzy_token_set_ratio(column: ColumnOrName, other: Union[Column, str], method: FuzzySimilarityMethod = "indel") -> Column:
+def compute_fuzzy_token_set_ratio(
+    column: ColumnOrName,
+    other: Union[Column, str],
+    method: FuzzySimilarityMethod = "indel",
+) -> Column:
     """Compute fuzzy similarity using token set comparison.
 
     Tokenizes strings by whitespace, creates sets of unique tokens, then
@@ -1429,13 +1447,22 @@ def compute_fuzzy_token_set_ratio(column: ColumnOrName, other: Union[Column, str
     else:
         other_expr = other._logical_expr
 
-    return Column._from_logical_expr(FuzzyTokenSetRatioExpr(Column._from_col_or_name(column)._logical_expr, other_expr, method))
+    return Column._from_logical_expr(
+        FuzzyTokenSetRatioExpr(
+            Column._from_col_or_name(column)._logical_expr, other_expr, method
+        )
+    )
 
 
 # NLP Text Preprocessing Functions
 
+
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
-def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopwords: Optional[List[str]] = None) -> Column:
+def remove_stopwords(
+    column: ColumnOrName,
+    language: str = "en",
+    custom_stopwords: Optional[List[str]] = None,
+) -> Column:
     """Remove stopwords from text while preserving meaningful content.
 
     Filters out common stopwords (e.g., "the", "is", "at") based on the specified language.
@@ -1475,10 +1502,14 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
         ```python
         import fenic as fc
 
-        df = fc.DataFrame({"text": [
-            "The quick brown fox jumps over the lazy dog",
-            "Machine learning is a subset of artificial intelligence"
-        ]})
+        df = fc.DataFrame(
+            {
+                "text": [
+                    "The quick brown fox jumps over the lazy dog",
+                    "Machine learning is a subset of artificial intelligence",
+                ]
+            }
+        )
 
         # Remove English stopwords
         df.select(fc.text.remove_stopwords(fc.col("text")))
@@ -1495,7 +1526,11 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
     Example: Custom stopwords
         ```python
         df = fc.DataFrame({"text": ["The company product launched yesterday"]})
-        df.select(fc.text.remove_stopwords(fc.col("text"), custom_stopwords=["company", "product"]))
+        df.select(
+            fc.text.remove_stopwords(
+                fc.col("text"), custom_stopwords=["company", "product"]
+            )
+        )
         # Result: ["The launched yesterday"]
         ```
 
@@ -1503,31 +1538,28 @@ def remove_stopwords(column: ColumnOrName, language: str = "en", custom_stopword
         ```python
         # Clean text before generating embeddings
         df = df.with_column(
-            "clean_text",
-            fc.text.remove_stopwords(fc.text.lower(fc.col("content")))
+            "clean_text", fc.text.remove_stopwords(fc.text.lower(fc.col("content")))
         )
-        df = df.with_column(
-            "embeddings",
-            fc.semantic.embed(fc.col("clean_text"))
-        )
+        df = df.with_column("embeddings", fc.semantic.embed(fc.col("clean_text")))
         ```
     """
-    from fenic.core._logical_plan.expressions.nlp import (
-        RemoveCustomStopwordsExpr,
-        RemoveStopwordsExpr,
-    )
+    from fenic.core._logical_plan.expressions.nlp import RemoveStopwordsExpr
 
     column_expr = Column._from_col_or_name(column)._logical_expr
+    language_expr = LiteralExpr(language, StringType)
 
     if custom_stopwords is not None:
-        # Use only custom stopwords (language parameter is ignored in this branch)
+        # Use custom stopwords (language parameter is still passed but custom takes precedence)
         stopwords_list = list(custom_stopwords)
         stopwords_expr = LiteralExpr(stopwords_list, ArrayType(StringType))
-        return Column._from_logical_expr(RemoveCustomStopwordsExpr(column_expr, stopwords_expr))
+        return Column._from_logical_expr(
+            RemoveStopwordsExpr(column_expr, language_expr, stopwords_expr)
+        )
     else:
         # Use language-based stopwords
-        language_expr = LiteralExpr(language, StringType)
-        return Column._from_logical_expr(RemoveStopwordsExpr(column_expr, language_expr))
+        return Column._from_logical_expr(
+            RemoveStopwordsExpr(column_expr, language_expr)
+        )
 
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
@@ -1557,11 +1589,15 @@ def detect_language(column: ColumnOrName, return_confidence: bool = False) -> Co
         ```python
         import fenic as fc
 
-        df = fc.DataFrame({"text": [
-            "The quick brown fox jumps over the lazy dog",
-            "El rápido zorro marrón salta sobre el perro perezoso",
-            "Le rapide renard brun saute par-dessus le chien paresseux"
-        ]})
+        df = fc.DataFrame(
+            {
+                "text": [
+                    "The quick brown fox jumps over the lazy dog",
+                    "El rápido zorro marrón salta sobre el perro perezoso",
+                    "Le rapide renard brun saute par-dessus le chien paresseux",
+                ]
+            }
+        )
 
         df.select(fc.text.detect_language(fc.col("text")))
         # Result: ["en", "es", "fr"]
@@ -1590,17 +1626,28 @@ def detect_language(column: ColumnOrName, return_confidence: bool = False) -> Co
         df = df.with_column("language", fc.text.detect_language(fc.col("text")))
         df = df.with_column(
             "clean_text",
-            fc.when(fc.col("language") == "en", fc.text.remove_stopwords(fc.col("text"), language="en"))
-              .when(fc.col("language") == "es", fc.text.remove_stopwords(fc.col("text"), language="es"))
-              .when(fc.col("language") == "fr", fc.text.remove_stopwords(fc.col("text"), language="fr"))
-              .otherwise(fc.col("text"))
+            fc.when(
+                fc.col("language") == "en",
+                fc.text.remove_stopwords(fc.col("text"), language="en"),
+            )
+            .when(
+                fc.col("language") == "es",
+                fc.text.remove_stopwords(fc.col("text"), language="es"),
+            )
+            .when(
+                fc.col("language") == "fr",
+                fc.text.remove_stopwords(fc.col("text"), language="fr"),
+            )
+            .otherwise(fc.col("text")),
         )
         ```
 
     Example: High-confidence filtering
         ```python
         # Only process documents with high confidence detection
-        df = df.with_column("lang_info", fc.text.detect_language(fc.col("text"), return_confidence=True))
+        df = df.with_column(
+            "lang_info", fc.text.detect_language(fc.col("text"), return_confidence=True)
+        )
         high_confidence = df.filter(fc.col("lang_info")["confidence"] > 0.8)
         ```
     """

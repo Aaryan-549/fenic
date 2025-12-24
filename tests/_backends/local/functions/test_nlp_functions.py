@@ -4,7 +4,6 @@ import pytest
 
 from fenic import col, text
 
-
 # Test data constants
 ENGLISH_TEXT_1 = "The quick brown fox jumps over the lazy dog"
 ENGLISH_TEXT_1_CLEANED = "quick brown fox jumps lazy dog"
@@ -48,9 +47,7 @@ def multilingual_test_df(local_session):
 
 def test_remove_stopwords_english(stopwords_test_df):
     """Test English stopword removal."""
-    result = stopwords_test_df.select(
-        text.remove_stopwords(col("text"))
-    ).to_polars()
+    result = stopwords_test_df.select(text.remove_stopwords(col("text"))).to_polars()
 
     # Check cleaned text matches expected output
     assert result["text"][0] == ENGLISH_TEXT_1_CLEANED
@@ -68,9 +65,7 @@ def test_remove_stopwords_spanish(multilingual_test_df):
     # Get the Spanish text (index 1)
     df = multilingual_test_df.filter(col("text").contains("rápido"))
 
-    result = df.select(
-        text.remove_stopwords(col("text"), language="es")
-    ).to_polars()
+    result = df.select(text.remove_stopwords(col("text"), language="es")).to_polars()
 
     text_result = result["text"][0]
 
@@ -85,9 +80,7 @@ def test_remove_stopwords_french(multilingual_test_df):
     # Get the French text (index 2)
     df = multilingual_test_df.filter(col("text").contains("rapide"))
 
-    result = df.select(
-        text.remove_stopwords(col("text"), language="fr")
-    ).to_polars()
+    result = df.select(text.remove_stopwords(col("text"), language="fr")).to_polars()
 
     text_result = result["text"][0]
 
@@ -128,8 +121,7 @@ def test_remove_stopwords_invalid_language(stopwords_test_df):
 def test_detect_language_basic(multilingual_test_df):
     """Test basic language detection."""
     result = multilingual_test_df.select(
-        col("text"),
-        text.detect_language(col("text")).alias("language")
+        col("text"), text.detect_language(col("text")).alias("language")
     ).to_polars()
 
     # Check detected languages (may not be perfect, but should be close)
@@ -156,7 +148,7 @@ def test_detect_language_with_confidence(multilingual_test_df):
     """Test language detection with confidence scores."""
     result = multilingual_test_df.select(
         col("text"),
-        text.detect_language(col("text"), return_confidence=True).alias("lang_info")
+        text.detect_language(col("text"), return_confidence=True).alias("lang_info"),
     ).to_polars()
 
     # Check that we get structs with language and confidence fields
@@ -186,9 +178,7 @@ def test_detect_language_null_handling(local_session):
     }
     df = local_session.create_dataframe(data)
 
-    result = df.select(
-        text.detect_language(col("text")).alias("language")
-    ).to_polars()
+    result = df.select(text.detect_language(col("text")).alias("language")).to_polars()
 
     # First should detect as English
     assert result["language"][0] == "en"
@@ -208,9 +198,7 @@ def test_stopwords_with_preprocessing_chain(stopwords_test_df):
     """Test stopword removal in a preprocessing chain."""
     # Chain operations: lowercase -> remove stopwords
     result = stopwords_test_df.select(
-        text.remove_stopwords(
-            text.lower(col("text"))
-        ).alias("cleaned")
+        text.remove_stopwords(text.lower(col("text"))).alias("cleaned")
     ).to_polars()
 
     # Check that stopwords are removed and text is lowercase
@@ -225,17 +213,25 @@ def test_language_detection_with_conditional_preprocessing(multilingual_test_df)
 
     # Detect language first
     df = multilingual_test_df.with_column(
-        "detected_lang",
-        text.detect_language(col("text"))
+        "detected_lang", text.detect_language(col("text"))
     )
 
     # Apply language-specific stopword removal
     df = df.with_column(
         "cleaned",
-        when(col("detected_lang") == "en", text.remove_stopwords(col("text"), language="en"))
-        .when(col("detected_lang") == "es", text.remove_stopwords(col("text"), language="es"))
-        .when(col("detected_lang") == "fr", text.remove_stopwords(col("text"), language="fr"))
-        .otherwise(col("text"))
+        when(
+            col("detected_lang") == "en",
+            text.remove_stopwords(col("text"), language="en"),
+        )
+        .when(
+            col("detected_lang") == "es",
+            text.remove_stopwords(col("text"), language="es"),
+        )
+        .when(
+            col("detected_lang") == "fr",
+            text.remove_stopwords(col("text"), language="fr"),
+        )
+        .otherwise(col("text")),
     )
 
     result = df.select("text", "detected_lang", "cleaned").to_polars()
@@ -258,9 +254,7 @@ def test_remove_stopwords_case_insensitive(local_session):
     }
     df = local_session.create_dataframe(data)
 
-    result = df.select(
-        text.remove_stopwords(col("text"))
-    ).to_polars()
+    result = df.select(text.remove_stopwords(col("text"))).to_polars()
 
     # All variations should remove "THE"/"the"/"The"
     for i in range(3):
@@ -268,6 +262,37 @@ def test_remove_stopwords_case_insensitive(local_session):
         assert "the" not in result_lower
         # "QUICK"/"quick"/"Quick" should remain
         assert "quick" in result_lower
+
+
+def test_remove_stopwords_single_space_collapse(local_session):
+    """Test that consecutive stopwords collapse to a single space.
+
+    When multiple consecutive stopwords are removed, they should collapse to
+    a single space rather than leaving multiple spaces in the output.
+
+    Example: "subject is all about any below tasks" -> "subject tasks"
+    Not: "subject      tasks" (with multiple spaces)
+    """
+    data = {
+        "text": [
+            "subject is all about any below tasks",
+            "the quick the brown the fox",
+            "a  the  is  are  test",  # Multiple spaces in input
+        ]
+    }
+    df = local_session.create_dataframe(data)
+
+    result = df.select(text.remove_stopwords(col("text"))).to_polars()
+
+    # First test case: consecutive stopwords should collapse to single space
+    assert result["text"][0] == "subject tasks"
+
+    # Second test case: alternating stopwords should leave single spaces
+    assert result["text"][1] == "quick brown fox"
+
+    # Third test case: verify no double spaces in output
+    assert "  " not in result["text"][2]  # No double spaces
+    assert result["text"][2] == "test"
 
 
 def test_detect_language_short_text(local_session):
@@ -282,9 +307,7 @@ def test_detect_language_short_text(local_session):
     }
     df = local_session.create_dataframe(data)
 
-    result = df.select(
-        text.detect_language(col("text")).alias("language")
-    ).to_polars()
+    result = df.select(text.detect_language(col("text")).alias("language")).to_polars()
 
     # Detection may not be reliable for very short text
     # Just verify it doesn't crash and returns string or null
@@ -315,7 +338,9 @@ More text with stopwords."""
     cleaned = result["cleaned"][0]
 
     # Verify stopwords are removed
-    assert "is" not in cleaned.lower() or cleaned.lower().count("is") < markdown_text.lower().count("is")
+    assert "is" not in cleaned.lower() or cleaned.lower().count(
+        "is"
+    ) < markdown_text.lower().count("is")
     assert "paragraph" in cleaned
     assert "stopwords" in cleaned
     assert "removed" in cleaned

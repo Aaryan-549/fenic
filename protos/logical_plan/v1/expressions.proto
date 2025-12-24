@@ -135,9 +135,9 @@ message LogicalExpr {
 
     // NLP text preprocessing expressions
     RemoveStopwordsExpr remove_stopwords = 94;
-    RemoveCustomStopwordsExpr remove_custom_stopwords = 95;
     DetectLanguageExpr detect_language = 96;
     DetectLanguageWithConfidenceExpr detect_language_with_confidence = 97;
+    // Field 95 reserved for future use (was RemoveCustomStopwordsExpr)
 
     // Case expressions
     WhenExpr when = 100;
@@ -670,13 +670,9 @@ message MdExtractHeaderChunks {
 
 // NLP text preprocessing expressions
 message RemoveStopwordsExpr {
-  LogicalExpr expr = 1;
+  LogicalExpr column = 1;
   LogicalExpr language = 2;
-}
-
-message RemoveCustomStopwordsExpr {
-  LogicalExpr expr = 1;
-  LogicalExpr stopwords = 2;
+  optional LogicalExpr custom_stopwords = 3;
 }
 
 message DetectLanguageExpr {
@@ -841,4 +837,3 @@ message FromUTCTimestampExpr {
   LogicalExpr expr = 1;
   string timezone = 2;
 }
-

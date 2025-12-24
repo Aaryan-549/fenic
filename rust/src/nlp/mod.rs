@@ -21,136 +21,89 @@ pub fn py_validate_language_code(language: &str) -> PyResult<()> {
     }
 }
 
-/// Remove stopwords from text based on language
+/// Remove stopwords from text column
+///
+/// This unified function removes common stopwords from text while preserving semantic content.
+/// It supports both language-specific stopwords and custom stopword lists.
+/// Multiple consecutive removed stopwords are collapsed into a single space.
 #[polars_expr(output_type=String)]
 fn remove_stopwords(inputs: &[Series]) -> PolarsResult<Series> {
     let text_series = inputs[0].str()?;
     let language_series = inputs[1].str()?;
-    let len = text_series.len();
+    let custom_stopwords = if inputs.len() > 2 {
+        Some(&inputs[2])
+    } else {
+        None
+    };
 
-    // Check if language is a literal (broadcast)
+    let len = text_series.len();
     let language_is_literal = language_series.len() == 1;
 
-    // Get the stopword set for the language
-    let mut stopword_sets: Vec<Option<&HashSet<&str>>> = Vec::with_capacity(len);
+    // Get stopwords - either custom or language-specific
+    let custom_stopwords_owned: Option<Vec<String>> = if let Some(custom_series) = custom_stopwords
+    {
+        // Use custom stopwords - extract from list column
+        let custom_list = custom_series.list()?;
+        let stopwords_is_literal = custom_list.len() == 1;
+        let idx = if stopwords_is_literal { 0 } else { 0 }; // Use first element for literal
 
-    if language_is_literal {
-        // Single language for all rows
-        let lang_opt = language_series.get(0);
-        let stopword_set = if let Some(lang) = lang_opt {
-            STOPWORDS.get(lang)
+        if let Some(first) = custom_list.get_as_series(idx) {
+            let str_ca = first.str()?;
+            Some(
+                str_ca
+                    .into_iter()
+                    .filter_map(|opt_str| opt_str.map(|s| s.to_string()))
+                    .collect(),
+            )
         } else {
             None
-        };
-
-        // Validate language if provided
-        if lang_opt.is_some() && stopword_set.is_none() {
-            return Err(PolarsError::ComputeError(
-                format!(
-                    "Unsupported language code '{}'. Supported languages: {}",
-                    lang_opt.unwrap(),
-                    STOPWORDS.keys().cloned().collect::<Vec<_>>().join(", ")
-                )
-                .into(),
-            ));
         }
-
-        stopword_sets.resize(len, stopword_set);
     } else {
-        // Different language per row
-        for i in 0..len {
-            let lang_opt = language_series.get(i);
-            let stopword_set = if let Some(lang) = lang_opt {
-                let set = STOPWORDS.get(lang);
-                if set.is_none() {
-                    return Err(PolarsError::ComputeError(
-                        format!(
-                            "Unsupported language code '{}'. Supported languages: {}",
-                            lang,
-                            STOPWORDS.keys().cloned().collect::<Vec<_>>().join(", ")
-                        )
-                        .into(),
-                    ));
-                }
-                set
-            } else {
-                None
-            };
-            stopword_sets.push(stopword_set);
-        }
-    }
+        None
+    };
 
     let mut result_vec = Vec::with_capacity(len);
 
     for i in 0..len {
         let text_opt = text_series.get(i);
-        let stopword_set = stopword_sets[i];
+        let lang_idx = if language_is_literal { 0 } else { i };
+        let lang_opt = language_series.get(lang_idx);
 
-        let value = match (text_opt, stopword_set) {
-            (Some(text), Some(stopwords)) => {
-                // Split text into words, filter out stopwords, and rejoin
-                let filtered: Vec<&str> = text
+        let value = match text_opt {
+            Some(text) => {
+                // Build stopwords set for this row
+                let stopwords_set: HashSet<String> =
+                    if let Some(ref custom) = custom_stopwords_owned {
+                        custom.iter().map(|s| s.to_lowercase()).collect()
+                    } else if let Some(lang) = lang_opt {
+                        if let Some(lang_stopwords) = STOPWORDS.get(lang) {
+                            lang_stopwords.iter().map(|s| s.to_string()).collect()
+                        } else {
+                            return Err(PolarsError::ComputeError(
+                                format!(
+                                    "Unsupported language code '{}'. Supported languages: {}",
+                                    lang,
+                                    STOPWORDS.keys().cloned().collect::<Vec<_>>().join(", ")
+                                )
+                                .into(),
+                            ));
+                        }
+                    } else {
+                        HashSet::new()
+                    };
+
+                let words: Vec<&str> = text
                     .split_whitespace()
                     .filter(|word| {
-                        // Convert to lowercase for case-insensitive matching
-                        let word_lower = word.to_lowercase();
-                        !stopwords.contains(word_lower.as_str())
+                        let lowercase = word.to_lowercase();
+                        !stopwords_set.contains(&lowercase)
                     })
                     .collect();
 
-                Some(filtered.join(" "))
+                // Join with single space (collapsing multiple removed stopwords into one space)
+                Some(words.join(" "))
             }
-            (Some(text), None) => Some(text.to_string()), // No stopwords, return original
-            _ => None,                                    // If text is null, return null
-        };
-
-        result_vec.push(value);
-    }
-
-    Ok(StringChunked::from_iter_options(PlSmallStr::EMPTY, result_vec.into_iter()).into_series())
-}
-
-/// Remove custom stopwords from text
-#[polars_expr(output_type=String)]
-fn remove_custom_stopwords(inputs: &[Series]) -> PolarsResult<Series> {
-    let text_series = inputs[0].str()?;
-    let stopwords_series = inputs[1].list()?;
-
-    let len = text_series.len();
-    let stopwords_is_literal = stopwords_series.len() == 1;
-
-    let mut result_vec = Vec::with_capacity(len);
-
-    for i in 0..len {
-        let text_opt = text_series.get(i);
-        let stopwords_idx = if stopwords_is_literal { 0 } else { i };
-        let stopwords_list_opt = stopwords_series.get(stopwords_idx);
-
-        let value = match (text_opt, stopwords_list_opt) {
-            (Some(text), Some(stopwords_series_item)) => {
-                // Convert Series to HashSet
-                let stopwords_str = stopwords_series_item.str()?;
-                let mut stopwords_set = HashSet::new();
-
-                for j in 0..stopwords_str.len() {
-                    if let Some(word) = stopwords_str.get(j) {
-                        stopwords_set.insert(word.to_lowercase());
-                    }
-                }
-
-                // Filter words
-                let filtered: Vec<&str> = text
-                    .split_whitespace()
-                    .filter(|word| {
-                        let word_lower = word.to_lowercase();
-                        !stopwords_set.contains(&word_lower)
-                    })
-                    .collect();
-
-                Some(filtered.join(" "))
-            }
-            (Some(text), None) => Some(text.to_string()), // No stopwords, return original
-            _ => None,                                    // If text is null, return null
+            None => None,
         };
 
         result_vec.push(value);

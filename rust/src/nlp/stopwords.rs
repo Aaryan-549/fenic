@@ -1,8 +1,20 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
-/// Stopwords for multiple languages
-/// Based on common NLP stopword lists
+/// Stopword collections for multiple languages
+///
+/// These stopword lists are curated from commonly used NLP corpora, similar to NLTK's
+/// stopwords collections. They contain high-frequency words (100-200+ per language) that
+/// typically add little semantic value to text analysis tasks such as topic modeling,
+/// sentiment analysis, and information retrieval.
+///
+/// The lists are manually curated and focus on:
+/// - Function words (articles, prepositions, conjunctions)
+/// - Common auxiliary verbs
+/// - Personal pronouns
+/// - Other high-frequency words with minimal semantic content
+///
+/// Languages supported: English (en), Spanish (es), French (fr), German (de), Italian (it), Portuguese (pt)
 pub static STOPWORDS: LazyLock<HashMap<&'static str, HashSet<&'static str>>> =
     LazyLock::new(|| {
         let mut map = HashMap::new();

@@ -193,9 +193,6 @@ from fenic.core._logical_plan.expressions.nlp import (
     DetectLanguageWithConfidenceExpr as DetectLanguageWithConfidenceExpr,
 )
 from fenic.core._logical_plan.expressions.nlp import (
-    RemoveCustomStopwordsExpr as RemoveCustomStopwordsExpr,
-)
-from fenic.core._logical_plan.expressions.nlp import (
     RemoveStopwordsExpr as RemoveStopwordsExpr,
 )
 from fenic.core._logical_plan.expressions.semantic import (

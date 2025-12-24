@@ -3,6 +3,7 @@
 This module registers function signatures for text processing functions,
 providing centralized type validation and return type inference.
 """
+
 from fenic.core._logical_plan.signatures.function_signature import (
     FunctionSignature,
     ReturnTypeStrategy,
@@ -26,13 +27,20 @@ TRANSCRIPT_OUTPUT_TYPE = ArrayType(
             StructField("index", IntegerType),  # Optional[int] - Entry index (1-based)
             StructField("speaker", StringType),  # Optional[str] - Speaker name
             StructField("start_time", DoubleType),  # float - Start time in seconds
-            StructField("end_time", DoubleType),  # Optional[float] - End time in seconds
-            StructField("duration", DoubleType),  # Optional[float] - Duration in seconds
+            StructField(
+                "end_time", DoubleType
+            ),  # Optional[float] - End time in seconds
+            StructField(
+                "duration", DoubleType
+            ),  # Optional[float] - Duration in seconds
             StructField("content", StringType),  # str - Transcript content/text
-            StructField("format", StringType),  # str - Original format ("srt", "webvtt", or "generic")
+            StructField(
+                "format", StringType
+            ),  # str - Original format ("srt", "webvtt", or "generic")
         ]
     )
 )
+
 
 def register_text_signatures():
     """Register all text function signatures."""
@@ -42,8 +50,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.extract",
             type_signature=Exact([StringType]),  # Takes string input
-            return_type=ReturnTypeStrategy.DYNAMIC  # Returns StructType with extracted fields
-        )
+            return_type=ReturnTypeStrategy.DYNAMIC,  # Returns StructType with extracted fields
+        ),
     )
 
     # Text chunking - string input returns array of strings
@@ -52,8 +60,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.chunk",
             type_signature=Exact([StringType]),  # Takes string input
-            return_type=ArrayType(StringType)
-        )
+            return_type=ArrayType(StringType),
+        ),
     )
 
     # Recursive text chunking - same as text_chunk
@@ -62,8 +70,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.recursive_chunk",
             type_signature=Exact([StringType]),  # Takes string input
-            return_type=ArrayType(StringType)
-        )
+            return_type=ArrayType(StringType),
+        ),
     )
 
     # Count tokens - string input returns integer
@@ -72,8 +80,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.count_tokens",
             type_signature=Exact([StringType]),  # Takes string input
-            return_type=IntegerType
-        )
+            return_type=IntegerType,
+        ),
     )
 
     # Concat - variable number of arguments, all must be castable to string
@@ -81,9 +89,11 @@ def register_text_signatures():
         "text.concat",
         FunctionSignature(
             function_name="text.concat",
-            type_signature=VariadicAny(expected_min_args=1),  # Any types castable to string
-            return_type=StringType
-        )
+            type_signature=VariadicAny(
+                expected_min_args=1
+            ),  # Any types castable to string
+            return_type=StringType,
+        ),
     )
 
     # Array join - array of strings (delimiter is literal)
@@ -92,8 +102,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.array_join",
             type_signature=Exact([ArrayType(StringType)]),  # array<string> input only
-            return_type=StringType
-        )
+            return_type=StringType,
+        ),
     )
 
     # Contains - string + substring (string literal or LogicalExpr)
@@ -102,8 +112,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.contains",
             type_signature=Exact([StringType, StringType]),
-            return_type=BooleanType
-        )
+            return_type=BooleanType,
+        ),
     )
 
     # Contains any - string input (substring list and case_insensitive handled as literals)
@@ -112,8 +122,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.contains_any",
             type_signature=Exact([StringType]),  # string input only
-            return_type=BooleanType
-        )
+            return_type=BooleanType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -121,8 +131,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.rlike",
             type_signature=Exact([StringType, StringType]),  # expr, pattern
-            return_type=BooleanType
-        )
+            return_type=BooleanType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -130,8 +140,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.like",
             type_signature=Exact([StringType, StringType]),  # expr, pattern
-            return_type=BooleanType
-        )
+            return_type=BooleanType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -139,8 +149,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.ilike",
             type_signature=Exact([StringType, StringType]),  # expr, pattern
-            return_type=BooleanType
-        )
+            return_type=BooleanType,
+        ),
     )
 
     # Transcript parsing - string input (format is literal)
@@ -149,8 +159,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.parse_transcript",
             type_signature=Exact([StringType]),  # string input only
-            return_type=TRANSCRIPT_OUTPUT_TYPE  # Returns specific transcript schema
-        )
+            return_type=TRANSCRIPT_OUTPUT_TYPE,  # Returns specific transcript schema
+        ),
     )
 
     # String prefix/suffix checking - string + prefix/suffix (string literal or LogicalExpr)
@@ -159,19 +169,21 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.starts_with",
             type_signature=Exact([StringType, StringType]),
-            return_type=BooleanType
-        )
+            return_type=BooleanType,
+        ),
     )
 
     FunctionRegistry.register(
         "text.ends_with",
         FunctionSignature(
             function_name="text.ends_with",
-            type_signature=OneOf([
-                Exact([StringType, StringType])  # string input + suffix expr
-            ]),
-            return_type=BooleanType
-        )
+            type_signature=OneOf(
+                [
+                    Exact([StringType, StringType])  # string input + suffix expr
+                ]
+            ),
+            return_type=BooleanType,
+        ),
     )
 
     # String splitting - string input (patterns/delimiters handled as literals)
@@ -180,8 +192,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.regexp_split",
             type_signature=Exact([StringType]),  # string input only
-            return_type=ArrayType(StringType)
-        )
+            return_type=ArrayType(StringType),
+        ),
     )
 
     # Regex functions
@@ -190,8 +202,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.regexp_count",
             type_signature=Exact([StringType, StringType]),  # string input + pattern
-            return_type=IntegerType
-        )
+            return_type=IntegerType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -199,26 +211,30 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.regexp_extract",
             type_signature=Exact([StringType, StringType]),  # string input + pattern
-            return_type=StringType
-        )
+            return_type=StringType,
+        ),
     )
 
     FunctionRegistry.register(
         "text.regexp_extract_all",
         FunctionSignature(
             function_name="text.regexp_extract_all",
-            type_signature=Exact([StringType, StringType, IntegerType]),  # string input + pattern + group index
-            return_type=ArrayType(StringType)
-        )
+            type_signature=Exact(
+                [StringType, StringType, IntegerType]
+            ),  # string input + pattern + group index
+            return_type=ArrayType(StringType),
+        ),
     )
 
     FunctionRegistry.register(
         "text.regexp_instr",
         FunctionSignature(
             function_name="text.regexp_instr",
-            type_signature=Exact([StringType, StringType, IntegerType]),  # string input + pattern + group index
-            return_type=IntegerType
-        )
+            type_signature=Exact(
+                [StringType, StringType, IntegerType]
+            ),  # string input + pattern + group index
+            return_type=IntegerType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -226,8 +242,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.regexp_substr",
             type_signature=Exact([StringType, StringType]),  # string input + pattern
-            return_type=StringType
-        )
+            return_type=StringType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -235,8 +251,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.split_part",
             type_signature=Exact([StringType, StringType, IntegerType]),
-            return_type=StringType
-        )
+            return_type=StringType,
+        ),
     )
 
     # String casing - string input (case type handled as literal)
@@ -245,8 +261,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.string_casing",
             type_signature=Exact([StringType]),  # string input only
-            return_type=StringType
-        )
+            return_type=StringType,
+        ),
     )
 
     # String trimming
@@ -254,12 +270,14 @@ def register_text_signatures():
         "text.strip_chars",
         FunctionSignature(
             function_name="text.strip_chars",
-            type_signature=OneOf([
-                Exact([StringType]),  # string input only (chars is None)
-                Exact([StringType, StringType])  # string input + chars expr
-            ]),
-            return_type=StringType
-        )
+            type_signature=OneOf(
+                [
+                    Exact([StringType]),  # string input only (chars is None)
+                    Exact([StringType, StringType]),  # string input + chars expr
+                ]
+            ),
+            return_type=StringType,
+        ),
     )
 
     # String replacement - string input + optional search/replacement expressions
@@ -267,9 +285,11 @@ def register_text_signatures():
         "text.replace",
         FunctionSignature(
             function_name="text.replace",
-            type_signature= Exact([StringType, StringType, StringType]),  # string input + search expr + replacement expr
-            return_type=StringType
-        )
+            type_signature=Exact(
+                [StringType, StringType, StringType]
+            ),  # string input + search expr + replacement expr
+            return_type=StringType,
+        ),
     )
 
     # String length functions
@@ -278,8 +298,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.str_length",
             type_signature=Exact([StringType]),  # string
-            return_type=IntegerType
-        )
+            return_type=IntegerType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -287,8 +307,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.byte_length",
             type_signature=Exact([StringType]),  # string
-            return_type=IntegerType
-        )
+            return_type=IntegerType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -296,8 +316,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.fuzzy_ratio",
             type_signature=Exact([StringType, StringType]),
-            return_type=DoubleType
-        )
+            return_type=DoubleType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -305,8 +325,8 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.fuzzy_token_sort_ratio",
             type_signature=Exact([StringType, StringType]),
-            return_type=DoubleType
-        )
+            return_type=DoubleType,
+        ),
     )
 
     FunctionRegistry.register(
@@ -314,8 +334,43 @@ def register_text_signatures():
         FunctionSignature(
             function_name="text.fuzzy_token_set_ratio",
             type_signature=Exact([StringType, StringType]),
-            return_type=DoubleType
-        )
+            return_type=DoubleType,
+        ),
+    )
+
+    # NLP text preprocessing functions
+    FunctionRegistry.register(
+        "text.remove_stopwords",
+        FunctionSignature(
+            function_name="text.remove_stopwords",
+            type_signature=OneOf(
+                [
+                    Exact([StringType, StringType]),  # column + language
+                    Exact(
+                        [StringType, StringType, ArrayType(StringType)]
+                    ),  # column + language + custom_stopwords
+                ]
+            ),
+            return_type=StringType,
+        ),
+    )
+
+    FunctionRegistry.register(
+        "text.detect_language",
+        FunctionSignature(
+            function_name="text.detect_language",
+            type_signature=Exact([StringType]),  # text input
+            return_type=StringType,
+        ),
+    )
+
+    FunctionRegistry.register(
+        "text.detect_language_with_confidence",
+        FunctionSignature(
+            function_name="text.detect_language_with_confidence",
+            type_signature=Exact([StringType]),  # text input
+            return_type=ReturnTypeStrategy.DYNAMIC,  # Returns struct with language and confidence
+        ),
     )
 
 
